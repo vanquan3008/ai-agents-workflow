@@ -1,0 +1,43 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!frontend/.env.development
+!frontend/.env.production
+.env.*.local
+*.local
+secrets/*
+!secrets/README.md
+*.pem
+*.pfx
+*.p12
+*.key
+appsettings.*.local.json
+
+# --- .NET ---
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+.vs/
+*.DotSettings.user
+
+# --- Node ---
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+dist-ssr/
+
+# Runtime output
+logs/
+*.log
+artifacts/
+
+# --- IDE / OS ---
+.idea/
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
