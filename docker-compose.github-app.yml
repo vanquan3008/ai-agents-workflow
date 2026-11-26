@@ -1,0 +1,16 @@
+# Override khi dùng GitHub App thật (GITHUB_MODE=App): mount private key dạng Docker secret,
+# không đưa nội dung key vào biến môi trường hay image.
+#   docker compose -f docker-compose.yml -f docker-compose.github-app.yml up -d
+services:
+  api:
+    secrets:
+      - source: github_app_private_key
+        target: /run/secrets/github-app.pem
+  worker:
+    secrets:
+      - source: github_app_private_key
+        target: /run/secrets/github-app.pem
+
+secrets:
+  github_app_private_key:
+    file: ${GITHUB_PRIVATE_KEY_FILE:-./secrets/github-app.pem}

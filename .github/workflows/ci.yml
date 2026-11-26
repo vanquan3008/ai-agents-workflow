@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (.NET 10)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      # PostgreSQL mới tinh để kiểm tra migration áp dụng được từ đầu (checklist 1.2).
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: devagent_ci
+          POSTGRES_USER: devagent
+          POSTGRES_PASSWORD: devagent
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U devagent -d devagent_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      ConnectionStrings__Postgres: Host=localhost;Port=5432;Database=devagent_ci;Username=devagent;Password=devagent
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: backend/global.json
+
+      - name: Restore
+        run: |
+          dotnet restore DevAgent.slnx
+          dotnet tool restore
+
+      - name: Build (cảnh báo là lỗi)
+        run: dotnet build DevAgent.slnx --no-restore -c Release
+
+      - name: Migration khớp model
+        run: dotnet ef migrations has-pending-model-changes --project src/DevAgent.Infrastructure --startup-project src/DevAgent.Api --no-build --configuration Release
+
+      - name: Áp migration lên PostgreSQL mới
+        run: dotnet ef database update --project src/DevAgent.Infrastructure --startup-project src/DevAgent.Api --no-build --configuration Release
+
+      # Integration test dùng Testcontainers (Docker có sẵn trên runner) và AI giả lập có kết quả cố định.
+      - name: Test
+        run: dotnet test DevAgent.slnx --no-build -c Release --logger "trx;LogFilePrefix=results" --results-directory ../TestResults
+
+      - name: Lưu kết quả test
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: TestResults
+
+  frontend:
+    name: Frontend (React + TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - name: Kiểm tra kiểu TypeScript (strict)
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Test component
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build API
+        run: docker build --target api -t devagent-api:ci backend
+      - name: Build Worker
+        run: docker build --target worker -t devagent-worker:ci backend
+      - name: Build dashboard
+        run: docker build -t devagent-web:ci frontend

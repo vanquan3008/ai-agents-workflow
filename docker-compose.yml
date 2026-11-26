@@ -1,0 +1,117 @@
+# Môi trường pilot/dev chạy được từ máy sạch (checklist 1.2):
+#   cp .env.example .env && docker compose up -d --build
+# Dashboard: http://localhost:8080 · API: http://localhost:5080 · Postgres: localhost:5432
+# Thêm trace/metric/log UI: docker compose --profile observability up -d
+# Dùng GitHub App thật: docker compose -f docker-compose.yml -f docker-compose.github-app.yml up -d
+
+name: devagent
+
+x-backend-env: &backend-env
+  ASPNETCORE_ENVIRONMENT: ${APP_ENVIRONMENT:-Development}
+  DOTNET_ENVIRONMENT: ${APP_ENVIRONMENT:-Development}
+  ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-devagent};Username=${POSTGRES_USER:-devagent};Password=${POSTGRES_PASSWORD:?Thiếu POSTGRES_PASSWORD trong .env}
+  PublicUrls__Dashboard: ${PUBLIC_DASHBOARD_URL:-http://localhost:8080}
+  Observability__ConsoleFormat: ${LOG_FORMAT:-json}
+  Observability__OtlpEndpoint: ${OTLP_ENDPOINT:-}
+  # AI
+  Ai__Provider: ${AI_PROVIDER:-Fake}
+  Ai__DefaultModel: ${AI_DEFAULT_MODEL:-claude-opus-5-5}
+  Ai__Effort: ${AI_EFFORT:-high}
+  Ai__Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
+  # GitHub App
+  GitHub__Mode: ${GITHUB_MODE:-Fake}
+  GitHub__AppId: ${GITHUB_APP_ID:-}
+  GitHub__PrivateKeyPath: ${GITHUB_PRIVATE_KEY_PATH:-}
+  GitHub__WebhookSecret: ${GITHUB_WEBHOOK_SECRET:-}
+  # Discord
+  Discord__Enabled: ${DISCORD_ENABLED:-false}
+  Discord__BotToken: ${DISCORD_BOT_TOKEN:-}
+  Discord__ApplicationId: ${DISCORD_APPLICATION_ID:-}
+  Discord__GuildId: ${DISCORD_GUILD_ID:-}
+  Discord__NotificationChannelId: ${DISCORD_NOTIFICATION_CHANNEL_ID:-}
+  # Bảo mật & hạn mức
+  Security__EncryptionKey: ${ENCRYPTION_KEY:-}
+  AgentLimits__MaxCostUsdPerTask: ${MAX_COST_USD_PER_TASK:-2.00}
+  AgentLimits__TaskTimeoutMinutes: ${TASK_TIMEOUT_MINUTES:-60}
+  AgentLimits__MaxConcurrentTasks: ${MAX_CONCURRENT_TASKS:-2}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-devagent}
+      POSTGRES_USER: ${POSTGRES_USER:-devagent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Thiếu POSTGRES_PASSWORD trong .env}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ./backend
+      target: api
+    image: devagent-api:local
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      Database__ApplyMigrationsOnStartup: ${APPLY_MIGRATIONS:-true}
+      Database__SeedDevelopmentData: ${SEED_DEV_DATA:-true}
+      Auth__Development__Enabled: ${DEV_AUTH_ENABLED:-true}
+      Auth__Development__DefaultUserId: ${DEV_AUTH_DEFAULT_USER:-0193a1c0-0000-7000-8000-000000000001}
+      Auth__Jwt__Authority: ${OIDC_AUTHORITY:-}
+      Auth__Jwt__Audience: ${OIDC_AUDIENCE:-devagent-api}
+      Cors__AllowedOrigins__0: ${PUBLIC_DASHBOARD_URL:-http://localhost:8080}
+      Cors__AllowedOrigins__1: http://localhost:5173
+    ports:
+      - "${API_PORT:-5080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      target: worker
+    image: devagent-worker:local
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      Worker__MaxConcurrentJobs: ${WORKER_MAX_CONCURRENT_JOBS:-2}
+    depends_on:
+      api:
+        condition: service_healthy   # API áp migration xong mới chạy Worker
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_AUTH_MODE: ${WEB_AUTH_MODE:-development}
+        VITE_DEV_USER_ID: ${DEV_AUTH_DEFAULT_USER:-0193a1c0-0000-7000-8000-000000000001}
+    image: devagent-web:local
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # Grafana + Tempo + Loki + Prometheus + OTel Collector trong một container (chỉ dùng cho dev).
+  otel-lgtm:
+    image: grafana/otel-lgtm:latest
+    profiles: ["observability"]
+    ports:
+      - "3000:3000"   # Grafana
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+
+volumes:
+  postgres-data:
