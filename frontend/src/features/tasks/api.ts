@@ -25,6 +25,8 @@ export interface CreateTaskInput {
   idempotencyKey: string
 }
 
+const LIVE_REFRESH_MS = 15_000
+
 export const tasksApi = {
   list: (filters: TaskFilters, signal?: AbortSignal) => apiRequest<PagedResult<TaskSummary>>('/tasks', { signal, query: { ...filters } }),
   get: (id: string, signal?: AbortSignal) => apiRequest<TaskDetail>(`/tasks/${id}`, { signal }),
@@ -38,25 +40,32 @@ export const tasksApi = {
   retry: (id: string) => apiRequest<{ status: TaskStatus }>(`/tasks/${id}/retry`, { method: 'POST' }),
 }
 
-export function useTasks(filters: TaskFilters, options: { refetchInterval?: number } = {}) {
+export function useTasks(filters: TaskFilters, options: { refetchInterval?: number; enabled?: boolean } = {}) {
   return useQuery({
     queryKey: taskKeys.list(filters),
     queryFn: ({ signal }) => tasksApi.list(filters, signal),
     placeholderData: keepPreviousData,
-    refetchInterval: options.refetchInterval ?? 15_000,
+    refetchInterval: options.refetchInterval ?? LIVE_REFRESH_MS,
+    enabled: options.enabled ?? true,
   })
 }
 
+/** Total count for a filter without loading rows; backs the dashboard counters. */
+export function useTaskCount(filters: Omit<TaskFilters, 'page' | 'pageSize'>) {
+  const query = useTasks({ ...filters, pageSize: 1 })
+  return { ...query, count: query.data?.totalCount }
+}
+
 export function useTask(id: string) {
-  return useQuery({ queryKey: taskKeys.detail(id), queryFn: ({ signal }) => tasksApi.get(id, signal), enabled: Boolean(id), refetchInterval: 15_000 })
+  return useQuery({ queryKey: taskKeys.detail(id), queryFn: ({ signal }) => tasksApi.get(id, signal), enabled: Boolean(id), refetchInterval: LIVE_REFRESH_MS })
 }
 
 export function useTaskTimeline(id: string) {
-  return useQuery({ queryKey: taskKeys.timeline(id), queryFn: ({ signal }) => tasksApi.timeline(id, 0, signal), enabled: Boolean(id), refetchInterval: 15_000 })
+  return useQuery({ queryKey: taskKeys.timeline(id), queryFn: ({ signal }) => tasksApi.timeline(id, 0, signal), enabled: Boolean(id), refetchInterval: LIVE_REFRESH_MS })
 }
 
 export function useTaskExecutions(id: string) {
-  return useQuery({ queryKey: taskKeys.executions(id), queryFn: ({ signal }) => tasksApi.executions(id, signal), enabled: Boolean(id), refetchInterval: 15_000 })
+  return useQuery({ queryKey: taskKeys.executions(id), queryFn: ({ signal }) => tasksApi.executions(id, signal), enabled: Boolean(id), refetchInterval: LIVE_REFRESH_MS })
 }
 
 export function useCreateTask() {
@@ -64,9 +73,9 @@ export function useCreateTask() {
   return useMutation({ mutationFn: tasksApi.create, onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }) })
 }
 
-function useTaskMutation<TArgs>(fn: (args: TArgs) => Promise<unknown>) {
+function useTaskMutation<TArgs>(mutate: (args: TArgs) => Promise<unknown>) {
   const queryClient = useQueryClient()
-  return useMutation({ mutationFn: fn, onSettled: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }) })
+  return useMutation({ mutationFn: mutate, onSettled: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }) })
 }
 
 export const useCancelTask = (id: string) => useTaskMutation((reason: string | undefined) => tasksApi.cancel(id, reason))

@@ -1,69 +1,90 @@
+import { AlertCircle, Bookmark, Gauge, Wrench } from 'lucide-react'
 import { Link, useParams } from 'react-router'
-import { useExecution } from './api'
-import { formatDateTime, formatUsd } from '@/shared/lib/format'
-import { ErrorBlock, LoadingBlock, PageHeader } from '@/shared/ui/page'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { formatDateTime, formatDuration, formatNumber, formatUsd, prettyJson } from '@/shared/lib/format'
+import { stepLabel } from '@/shared/lib/labels'
+import { CodeBlock } from '@/shared/ui/code-block'
+import { DescriptionList } from '@/shared/ui/description-list'
+import { PageHeader } from '@/shared/ui/page-header'
+import { Panel } from '@/shared/ui/panel'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/shared/ui/states'
 import { StatusBadge } from '@/shared/ui/status-badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useExecution } from './api'
+import { ToolExecutionList } from './components/ToolExecutionList'
 
 export default function ExecutionPage() {
   const { executionId = '' } = useParams()
   const query = useExecution(executionId)
-  if (query.isPending) return <LoadingBlock />
+
+  if (query.isPending) return <LoadingBlock rows={6} />
   if (query.isError) return <ErrorBlock error={query.error} onRetry={() => void query.refetch()} />
   const { execution, checkpoint, toolExecutions } = query.data
+
   return (
-    <article className="space-y-6">
+    <article>
       <PageHeader
-        title={`${execution.step} · lần ${execution.attempt}`}
-        description={execution.model}
+        backTo={{ to: `/tasks/${execution.taskId}`, label: 'Về task' }}
+        eyebrow={<StatusBadge status={execution.status} />}
+        title={
+          <>
+            {stepLabel(execution.step)} <span className="text-muted-foreground font-normal">· lần {execution.attempt}</span>
+          </>
+        }
+        description={<span className="font-mono">{execution.model}</span>}
         actions={
-          <Link className="underline" to={`/tasks/${execution.taskId}`}>
-            Xem task
-          </Link>
+          <Button asChild variant="outline">
+            <Link to={`/tasks/${execution.taskId}`}>Mở task</Link>
+          </Button>
         }
       />
-      <StatusBadge status={execution.status} />
-      <dl className="grid max-w-xl grid-cols-2 gap-3 text-sm">
-        <dt>Bắt đầu</dt>
-        <dd>{formatDateTime(execution.startedAt)}</dd>
-        <dt>Kết thúc</dt>
-        <dd>{formatDateTime(execution.finishedAt)}</dd>
-        <dt>Chi phí</dt>
-        <dd>{formatUsd(execution.usage.estimatedCostUsd)}</dd>
-        <dt>Token vào / ra</dt>
-        <dd>
-          {execution.usage.inputTokens} / {execution.usage.outputTokens}
-        </dd>
-      </dl>
-      {execution.error && (
-        <p role="alert" className="text-destructive">
-          {execution.error}
-        </p>
-      )}
-      {checkpoint && (
-        <details>
-          <summary>Checkpoint</summary>
-          <pre className="overflow-auto rounded-md bg-muted p-4 text-xs">{checkpoint}</pre>
-        </details>
-      )}
-      <Card>
-        <CardHeader>
-          <CardTitle>Công cụ</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {toolExecutions.length === 0 && <p className="text-sm text-muted-foreground">Bước này chưa có lời gọi công cụ.</p>}
-          {toolExecutions.map((tool) => (
-            <details key={tool.id} className="rounded-md border p-4">
-              <summary>
-                {tool.sequence}. {tool.toolName} · {tool.status}
-              </summary>
-              <p className="my-2 text-sm">{tool.denialReason}</p>
-              <pre className="overflow-auto whitespace-pre-wrap text-xs">{tool.inputJson}</pre>
-              <pre className="mt-3 overflow-auto whitespace-pre-wrap text-xs">{tool.outputJson}</pre>
-            </details>
-          ))}
-        </CardContent>
-      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="min-w-0 space-y-4">
+          {execution.error && (
+            <Alert variant="destructive" className="border-destructive/30 bg-destructive/5">
+              <AlertCircle />
+              <AlertTitle>Lần chạy kết thúc với lỗi</AlertTitle>
+              <AlertDescription className="break-words whitespace-pre-wrap">{execution.error}</AlertDescription>
+            </Alert>
+          )}
+
+          <Panel title="Lời gọi công cụ" description={`${toolExecutions.length} lời gọi`} icon={<Wrench />} flush>
+            {toolExecutions.length === 0 ? (
+              <EmptyBlock
+                className="m-4 w-auto py-6"
+                icon={<Wrench />}
+                title="Bước này chưa gọi công cụ"
+                description="Planner chỉ đọc cấu trúc repository; công cụ ghi file và chạy lệnh thuộc các bước sau."
+              />
+            ) : (
+              <ToolExecutionList tools={toolExecutions} />
+            )}
+          </Panel>
+
+          {checkpoint && (
+            <Panel title="Checkpoint" description="Điểm lưu tiến độ để Worker khác tiếp tục khi lease hết hạn." icon={<Bookmark />}>
+              <CodeBlock code={prettyJson(checkpoint)} label="JSON" />
+            </Panel>
+          )}
+        </div>
+
+        <aside className="min-w-0 lg:sticky lg:top-16 lg:self-start">
+          <Panel title="Số liệu" icon={<Gauge />}>
+            <DescriptionList
+              items={[
+                { label: 'Bắt đầu', value: formatDateTime(execution.startedAt) },
+                { label: 'Kết thúc', value: formatDateTime(execution.finishedAt) },
+                { label: 'Thời lượng', value: formatDuration(execution.durationSeconds) },
+                { label: 'Chi phí ước tính', value: formatUsd(execution.usage.estimatedCostUsd) },
+                { label: 'Token vào', value: formatNumber(execution.usage.inputTokens) },
+                { label: 'Token ra', value: formatNumber(execution.usage.outputTokens) },
+                { label: 'Token cache', value: formatNumber(execution.usage.cacheReadTokens) },
+              ]}
+            />
+          </Panel>
+        </aside>
+      </div>
     </article>
   )
 }

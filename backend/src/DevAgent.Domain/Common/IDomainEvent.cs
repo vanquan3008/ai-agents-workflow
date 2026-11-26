@@ -1,14 +1,7 @@
 namespace DevAgent.Domain.Common;
 
-/// <summary>Sự kiện nghiệp vụ đã xảy ra. Thời điểm luôn là UTC.</summary>
+/// <summary>A business fact that has already happened. <see cref="OccurredAt"/> is always UTC.</summary>
 public interface IDomainEvent
 {
     DateTimeOffset OccurredAt { get; }
-}
-
-public interface IHasDomainEvents
-{
-    IReadOnlyCollection<IDomainEvent> DomainEvents { get; }
-
-    void ClearDomainEvents();
 }

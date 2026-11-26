@@ -20,7 +20,7 @@ jobs:
       run:
         working-directory: backend
     services:
-      # PostgreSQL mới tinh để kiểm tra migration áp dụng được từ đầu (checklist 1.2).
+      # Fresh PostgreSQL to prove migrations apply from scratch.
       postgres:
         image: postgres:17-alpine
         env:
@@ -47,20 +47,23 @@ jobs:
           dotnet restore DevAgent.slnx
           dotnet tool restore
 
-      - name: Build (cảnh báo là lỗi)
+      - name: Build (warnings as errors)
         run: dotnet build DevAgent.slnx --no-restore -c Release
 
-      - name: Migration khớp model
+      - name: Formatting and code style
+        run: dotnet format DevAgent.slnx --verify-no-changes --no-restore
+
+      - name: Migrations match the model
         run: dotnet ef migrations has-pending-model-changes --project src/DevAgent.Infrastructure --startup-project src/DevAgent.Api --no-build --configuration Release
 
-      - name: Áp migration lên PostgreSQL mới
+      - name: Apply migrations to a fresh PostgreSQL
         run: dotnet ef database update --project src/DevAgent.Infrastructure --startup-project src/DevAgent.Api --no-build --configuration Release
 
-      # Integration test dùng Testcontainers (Docker có sẵn trên runner) và AI giả lập có kết quả cố định.
+      # Integration tests use Testcontainers (Docker is on the runner) and the deterministic fake AI.
       - name: Test
         run: dotnet test DevAgent.slnx --no-build -c Release --logger "trx;LogFilePrefix=results" --results-directory ../TestResults
 
-      - name: Lưu kết quả test
+      - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -83,7 +86,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - run: npm ci
-      - name: Kiểm tra kiểu TypeScript (strict)
+      - name: TypeScript type check (strict)
         run: npm run typecheck
       - name: Lint
         run: npm run lint

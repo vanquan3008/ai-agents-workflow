@@ -12,7 +12,7 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 5_000,
       refetchOnWindowFocus: true,
-      // Không thử lại lỗi 4xx (quyền, không tìm thấy, dữ liệu sai): thử lại không thay đổi kết quả.
+      // Never retry 4xx responses (permission, not found, validation): retrying cannot change the outcome.
       retry: (failureCount, error) => !(error instanceof ApiError && error.status < 500) && failureCount < 2,
     },
     mutations: { retry: false },

@@ -6,8 +6,8 @@ using DevAgent.Domain.Common;
 namespace DevAgent.Domain.Policies;
 
 /// <summary>
-/// Mẫu đường dẫn dạng glob, so khớp trên đường dẫn tương đối dùng dấu '/'.
-/// Hỗ trợ <c>**</c> (nhiều cấp thư mục), <c>*</c> (trong một cấp) và <c>?</c> (một ký tự).
+/// Glob pattern matched against '/'-separated relative paths.
+/// Supports <c>**</c> (any depth), <c>*</c> (within one segment) and <c>?</c> (one character).
 /// </summary>
 public sealed class PathPattern
 {
@@ -27,7 +27,7 @@ public sealed class PathPattern
         return normalized is not null && _regex.IsMatch(normalized);
     }
 
-    /// <summary>Chuẩn hóa đường dẫn; trả null nếu đường dẫn thoát ra ngoài workspace hoặc là tuyệt đối.</summary>
+    /// <summary>Normalizes a path; returns null for absolute paths or paths escaping the workspace.</summary>
     public static string? Normalize(string relativePath)
     {
         if (string.IsNullOrWhiteSpace(relativePath))
@@ -76,7 +76,7 @@ public sealed class PathPattern
             var c = glob[i];
             if (c == '*' && i + 1 < glob.Length && glob[i + 1] == '*')
             {
-                // "**/" khớp không hoặc nhiều thư mục; "**" ở cuối khớp mọi thứ.
+                // "**/" matches zero or more directories; a trailing "**" matches everything.
                 if (i + 2 < glob.Length && glob[i + 2] == '/')
                 {
                     sb.Append("(?:.*/)?");

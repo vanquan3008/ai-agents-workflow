@@ -2,7 +2,7 @@ using DevAgent.Application.Common;
 
 namespace DevAgent.Api.Common;
 
-/// <summary>Ánh xạ <see cref="Result{T}"/> sang HTTP: thành công trả dữ liệu, lỗi trả ProblemDetails (RFC 9457) có mã ổn định.</summary>
+/// <summary>Maps <see cref="Result{T}"/> to HTTP: success returns the value, failure returns RFC 9457 ProblemDetails with a stable code.</summary>
 internal static class ResultExtensions
 {
     public static IResult ToHttp<T>(this Result<T> result, Func<T, IResult>? onSuccess = null)

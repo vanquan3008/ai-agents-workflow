@@ -12,10 +12,9 @@ using Microsoft.AspNetCore.SignalR;
 namespace DevAgent.Api.Realtime;
 
 /// <summary>
-/// Hub realtime cho dashboard. Đăng ký nhận sự kiện đi qua cùng kiểm tra quyền với API đọc (checklist 1.3):
-/// người ngoài project không thể vào group của task.
-/// Client: kết nối /hubs/tasks, gọi SubscribeTask(taskId), nhận "taskEvent"; sau khi kết nối lại,
-/// gọi GET /api/v1/tasks/{id}/timeline?after=&lt;sequence&gt; để đọc bù.
+/// Realtime hub for the dashboard. Subscriptions pass the same authorization as the read API, so outsiders cannot
+/// join a task group. Clients connect to /hubs/tasks, call SubscribeTask(taskId) and receive "taskEvent"; after a
+/// reconnect they replay with GET /api/v1/tasks/{id}/timeline?after=&lt;sequence&gt;.
 /// </summary>
 [Authorize]
 internal sealed class TasksHub(HttpCurrentUser currentUser) : Hub
@@ -60,7 +59,7 @@ internal sealed class TasksHub(HttpCurrentUser currentUser) : Hub
     public Task UnsubscribeProject(Guid projectId) => Groups.RemoveFromGroupAsync(Context.ConnectionId, ProjectGroup(projectId));
 }
 
-/// <summary>Nhận sự kiện từ LISTEN PostgreSQL và đẩy tới group của task và project.</summary>
+/// <summary>Receives events from the PostgreSQL listener and pushes them to the task and project groups.</summary>
 internal sealed class SignalRTaskEventSink(IHubContext<TasksHub> hub) : ITaskEventSink
 {
     public Task DeliverAsync(TaskRealtimeEvent taskEvent, CancellationToken cancellationToken)

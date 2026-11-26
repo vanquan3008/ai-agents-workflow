@@ -7,9 +7,9 @@ using Microsoft.Extensions.Options;
 namespace DevAgent.Api.Endpoints;
 
 /// <summary>
-/// Đăng nhập/phiên. Access token trả trong body (client giữ trong bộ nhớ); refresh token chỉ nằm trong cookie
-/// httpOnly + SameSite=Strict, giới hạn path /api/v1/auth. Refresh/logout yêu cầu header <c>X-DevAgent-Client</c>
-/// để request chéo site (CSRF) bị chặn bởi preflight CORS.
+/// Sign-in and session endpoints. The access token is returned in the body (kept in memory by the client); the refresh
+/// token lives only in an HttpOnly, SameSite=Strict cookie scoped to /api/v1/auth. Refresh and logout require the
+/// <c>X-DevAgent-Client</c> header so cross-site (CSRF) requests are stopped by the CORS preflight.
 /// </summary>
 internal static class AuthEndpoints
 {

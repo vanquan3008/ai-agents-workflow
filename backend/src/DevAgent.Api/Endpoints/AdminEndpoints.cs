@@ -5,7 +5,7 @@ using DevAgent.Application.Features.Admin;
 
 namespace DevAgent.Api.Endpoints;
 
-/// <summary>Quản trị người dùng (Super Admin). Use case kiểm tra lại quyền từ DB, policy ở đây là lớp chặn sớm.</summary>
+/// <summary>User administration (super admin). Use cases re-check permissions from the database; this policy is an early gate.</summary>
 internal static class AdminEndpoints
 {
     public sealed record CreateUserRequest(string Email, string DisplayName, string SystemRole, string TemporaryPassword);

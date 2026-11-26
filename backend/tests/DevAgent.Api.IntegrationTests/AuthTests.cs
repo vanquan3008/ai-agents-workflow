@@ -9,7 +9,7 @@ using Shouldly;
 
 namespace DevAgent.Api.IntegrationTests;
 
-/// <summary>Luồng xác thực đầu-cuối: đăng nhập, buộc đổi mật khẩu, refresh xoay vòng, phát hiện dùng lại, khóa tài khoản, quản trị.</summary>
+/// <summary>End-to-end authentication: sign-in, forced password change, refresh rotation, reuse detection, lockout and administration.</summary>
 public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     private sealed class Browser
@@ -60,7 +60,7 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
                 }
             }
 
-            // Đệm body để test đọc lại được sau khi helper đã đọc.
+            // Buffer the body so the test can read it again after the helper.
             await response.Content.LoadIntoBufferAsync(TestContext.Current.CancellationToken);
             if (response.IsSuccessStatusCode && response.Content.Headers.ContentType?.MediaType == "application/json")
             {
@@ -88,7 +88,7 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
     [Fact]
     public async Task Seeded_super_admin_must_change_password_before_using_api()
     {
-        // Bootstrap cần DB riêng vì các test quản trị khác thay đổi tài khoản Super Admin.
+        // Bootstrap needs its own database because other admin tests modify the super admin account.
         await using var bootstrapFactory = new ApiFactory();
         await bootstrapFactory.InitializeAsync();
         Assert.SkipUnless(bootstrapFactory.DockerAvailable, "Cần Docker.");
@@ -131,7 +131,7 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var second = browser.RefreshCookie!;
         second.ShouldNotBe(first);
 
-        // Kẻ tấn công dùng lại token cũ → bị từ chối và cả họ token bị thu hồi.
+        // An attacker replays the old token: rejected, and the whole token family is revoked.
         (await browser.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh", cookieOverride: first)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await browser.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh", cookieOverride: second)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
@@ -205,7 +205,7 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         (await owner.PostAsJsonAsync("/api/v1/projects", new { name = "X", slug = $"x-{Guid.NewGuid():N}"[..12] }, TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // Super Admin đã đổi mật khẩu (hoặc chưa) — dùng token ký trực tiếp để quản trị.
+        // Whether or not the super admin changed the password, administer with a directly signed token.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DevAgentDbContext>();
         var adminId = (await db.Users.SingleAsync(u => u.Email == TestData.SuperAdminEmail, TestContext.Current.CancellationToken)).Id.Value;
@@ -232,7 +232,7 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var selfDemote = await admin.PatchAsJsonAsync($"/api/v1/admin/users/{adminId}", new { systemRole = "USER" }, TestContext.Current.CancellationToken);
         selfDemote.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
-        // Super Admin tạo project, giao Owner bằng email và thấy mọi project.
+        // The super admin creates a project, assigns an owner by email and sees every project.
         var slug = $"p-{Guid.NewGuid():N}"[..14];
         var project = await admin.PostAsJsonAsync("/api/v1/projects", new { name = "Dự án mới", slug, ownerEmail = "owner@devagent.test" }, TestContext.Current.CancellationToken);
         project.StatusCode.ShouldBe(HttpStatusCode.Created);

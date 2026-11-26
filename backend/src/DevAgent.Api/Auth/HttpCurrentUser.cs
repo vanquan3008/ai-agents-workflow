@@ -6,8 +6,8 @@ using Microsoft.IdentityModel.JsonWebTokens;
 namespace DevAgent.Api.Auth;
 
 /// <summary>
-/// Đọc DevAgent user id (claim <c>sub</c>) từ principal đã xác thực. Với SignalR, hub gán principal của kết nối
-/// qua <see cref="UsePrincipal"/> vì HttpContext không luôn sẵn trong lời gọi hub.
+/// Reads the DevAgent user id (<c>sub</c> claim) from the authenticated principal. SignalR hubs assign the connection's
+/// principal through <see cref="UsePrincipal"/> because HttpContext is not always available inside hub calls.
 /// </summary>
 internal sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUser
 {

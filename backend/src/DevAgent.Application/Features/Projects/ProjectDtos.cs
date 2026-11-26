@@ -1,11 +1,9 @@
 using DevAgent.Application.Common;
-using DevAgent.Domain.Common;
-using DevAgent.Domain.Projects;
 using DevAgent.Domain.Repositories;
 
 namespace DevAgent.Application.Features.Projects;
 
-/// <param name="MyRole">Vai trò của người xem trong project; Super Admin không là thành viên thì là SUPER_ADMIN.</param>
+/// <param name="MyRole">The viewer's role in the project; SUPER_ADMIN when a super admin is not a member.</param>
 public sealed record ProjectDto(Guid Id, string Name, string Slug, string MyRole, int MemberCount, int RepositoryCount, DateTimeOffset CreatedAt);
 
 public sealed record ProjectMemberDto(Guid UserId, string DisplayName, string Email, string Role, DateTimeOffset AddedAt);
@@ -56,25 +54,4 @@ public sealed record RepositoryDto(
             repository.IsActive,
             repository.CreatedAt);
     }
-}
-
-/// <summary>Truy vấn đọc cho module Projects (hiện thực bằng projection EF, không tải aggregate).</summary>
-public interface IProjectQueries
-{
-    /// <summary>Project mà người dùng là thành viên.</summary>
-    Task<IReadOnlyList<ProjectDto>> ListForUserAsync(UserId userId, CancellationToken cancellationToken);
-
-    /// <summary>Mọi project (Super Admin); <paramref name="viewer"/> để điền vai trò nếu là thành viên.</summary>
-    Task<IReadOnlyList<ProjectDto>> ListAllAsync(UserId viewer, CancellationToken cancellationToken);
-
-    Task<ProjectDto?> GetAsync(ProjectId projectId, UserId viewer, CancellationToken cancellationToken);
-
-    Task<IReadOnlyList<ProjectId>> ListAllProjectIdsAsync(CancellationToken cancellationToken);
-
-    Task<IReadOnlyList<ProjectMemberDto>> ListMembersAsync(ProjectId projectId, CancellationToken cancellationToken);
-
-    /// <summary>Các project mà người dùng có quyền <paramref name="permission"/>; dùng để lọc danh sách.</summary>
-    Task<IReadOnlyList<ProjectId>> ListProjectIdsWithPermissionAsync(UserId userId, ProjectPermission permission, CancellationToken cancellationToken);
-
-    Task<IReadOnlyList<RepositoryDto>> ListRepositoriesAsync(ProjectId projectId, CancellationToken cancellationToken);
 }

@@ -15,7 +15,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Kiểm tra kiểu nghiêm ngặt (checklist 1.1: TypeScript strict) */
+    /* Strict type checking */
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,

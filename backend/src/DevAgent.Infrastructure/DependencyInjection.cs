@@ -11,6 +11,24 @@ using DevAgent.Application.Features.Executions;
 using DevAgent.Application.Features.Projects;
 using DevAgent.Application.Features.Tasks;
 using DevAgent.Application.Options;
+using DevAgent.Domain.Agents;
+using DevAgent.Domain.Agents.Repositories;
+using DevAgent.Domain.Approvals;
+using DevAgent.Domain.Approvals.Repositories;
+using DevAgent.Domain.Auditing;
+using DevAgent.Domain.Auditing.Repositories;
+using DevAgent.Domain.Executions;
+using DevAgent.Domain.Executions.Repositories;
+using DevAgent.Domain.Projects;
+using DevAgent.Domain.Projects.Repositories;
+using DevAgent.Domain.Repositories;
+using DevAgent.Domain.Repositories.Repositories;
+using DevAgent.Domain.Tasks;
+using DevAgent.Domain.Tasks.Repositories;
+using DevAgent.Domain.Users;
+using DevAgent.Domain.Users.Repositories;
+using DevAgent.Domain.Workflows;
+using DevAgent.Domain.Workflows.Repositories;
 using DevAgent.Infrastructure.Ai;
 using DevAgent.Infrastructure.Events;
 using DevAgent.Infrastructure.Integrations;
@@ -32,8 +50,8 @@ namespace DevAgent.Infrastructure;
 public static class DependencyInjection
 {
     /// <summary>
-    /// Đăng ký hạ tầng dùng chung cho API và Worker: options (validate khi khởi động), PostgreSQL,
-    /// hàng đợi bền vững, adapter AI/GitHub/Discord/sandbox và mã hóa credential.
+    /// Infrastructure shared by API and worker: options validated on startup, PostgreSQL, the durable queue,
+    /// AI/GitHub/Discord/sandbox adapters and credential encryption.
     /// </summary>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
@@ -52,7 +70,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>Chỉ API: LISTEN PostgreSQL và chuyển sự kiện tới <typeparamref name="TSink"/> (SignalR).</summary>
+    /// <summary>API only: LISTENs on PostgreSQL and forwards events to <typeparamref name="TSink"/> (SignalR).</summary>
     public static IServiceCollection AddRealtimeListener<TSink>(this IServiceCollection services)
         where TSink : class, ITaskEventSink
     {
@@ -61,7 +79,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>Chỉ API: áp migration/seed khi khởi động theo cấu hình Database.</summary>
+    /// <summary>API only: applies migrations and the bootstrap seed on startup according to the Database section.</summary>
     public static IServiceCollection AddDatabaseInitializer(this IServiceCollection services) =>
         services.AddHostedService<DatabaseInitializer>();
 
@@ -180,7 +198,7 @@ public static class DependencyInjection
         var discord = configuration.GetSection(DiscordOptions.SectionName).Get<DiscordOptions>() ?? new();
         if (discord.Enabled)
         {
-            // Không thêm retry trong HttpClient: thử lại do hàng đợi bền vững đảm nhận (backoff, Retry-After, dead-letter).
+            // No HttpClient retry policy: the durable queue owns retries (backoff, Retry-After, dead-letter).
             services.AddHttpClient<IChatNotifier, DiscordChatNotifier>((sp, http) =>
             {
                 var options = sp.GetRequiredService<IOptions<DiscordOptions>>().Value;

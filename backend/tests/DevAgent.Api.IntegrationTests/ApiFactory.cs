@@ -1,7 +1,8 @@
 using System.Net.Http.Headers;
-using DevAgent.Application.Abstractions.Persistence;
 using DevAgent.Application.Abstractions.Security;
 using DevAgent.Domain.Common;
+using DevAgent.Domain.Users;
+using DevAgent.Domain.Users.Repositories;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,8 +11,8 @@ using Testcontainers.PostgreSql;
 namespace DevAgent.Api.IntegrationTests;
 
 /// <summary>
-/// Chạy API thật trên PostgreSQL thật (Testcontainers) với môi trường Testing: AI và GitHub dùng bản giả lập xác định.
-/// Xác thực bằng JWT thật do chính ứng dụng ký. Cần Docker; không có Docker thì test được bỏ qua (CI luôn có Docker).
+/// Runs the real API against a real PostgreSQL (Testcontainers) in the Testing environment with deterministic AI and GitHub fakes.
+/// Authentication uses real JWTs signed by the application. Requires Docker; tests are skipped without it (CI always has Docker).
 /// </summary>
 public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
@@ -31,7 +32,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             await _postgres.StartAsync();
             DockerAvailable = true;
         }
-#pragma warning disable CA1031 // Không có Docker: đánh dấu để test tự bỏ qua.
+#pragma warning disable CA1031 // No Docker: flag it so tests skip themselves.
         catch (Exception)
 #pragma warning restore CA1031
         {
@@ -48,7 +49,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         }
     }
 
-    /// <summary>Client mang access token hợp lệ của người dùng (ký bằng dịch vụ token của ứng dụng).</summary>
+    /// <summary>A client carrying a valid access token for the user, signed by the application token service.</summary>
     public HttpClient ClientFor(Guid userId)
     {
         using var scope = Services.CreateScope();
@@ -67,14 +68,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         builder.UseEnvironment("Testing");
 
-        // Giống Development: phát hiện sớm service thiếu đăng ký hoặc singleton phụ thuộc scoped.
+        // Like Development: catch missing registrations and singletons depending on scoped services early.
         builder.UseDefaultServiceProvider(options =>
         {
             options.ValidateOnBuild = true;
             options.ValidateScopes = true;
         });
 
-        // UseSetting (không phải ConfigureAppConfiguration) để giá trị có hiệu lực ngay khi Program.cs đọc cấu hình.
+        // UseSetting (not ConfigureAppConfiguration) so values apply before Program.cs reads configuration.
         builder.UseSetting("ConnectionStrings:Postgres", _postgres?.GetConnectionString() ?? "Host=localhost;Database=unused");
         builder.UseSetting("Database:ApplyMigrationsOnStartup", DockerAvailable ? "true" : "false");
         builder.UseSetting("Bootstrap:SuperAdmin:Email", TestData.SuperAdminEmail);

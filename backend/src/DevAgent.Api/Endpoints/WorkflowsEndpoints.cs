@@ -6,7 +6,7 @@ namespace DevAgent.Api.Endpoints;
 
 internal static class WorkflowsEndpoints
 {
-    /// <param name="ExpectedVersion">Phiên bản đang xem; khác phiên bản hiện hành thì trả 409.</param>
+    /// <param name="ExpectedVersion">The version being edited; a mismatch returns 409.</param>
     public sealed record UpdateWorkflowRequest(int ExpectedVersion, WorkflowDefinitionDto Definition, string? Comment);
 
     public static RouteGroupBuilder MapWorkflowsEndpoints(this RouteGroupBuilder api)

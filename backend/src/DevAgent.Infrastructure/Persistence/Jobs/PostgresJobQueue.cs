@@ -7,11 +7,11 @@ using Microsoft.Extensions.Options;
 namespace DevAgent.Infrastructure.Persistence.Jobs;
 
 /// <summary>
-/// Hàng đợi bền vững trên PostgreSQL cho pilot (checklist 0.8: chưa cần Redis).
-/// - Enqueue: thêm bản ghi vào DbContext hiện tại, commit cùng giao dịch nghiệp vụ (outbox).
-/// - Lease: <c>FOR UPDATE SKIP LOCKED</c> để nhiều Worker nhận việc song song mà không trùng; lease có thời hạn.
-/// - Dead-letter: hết lượt thử (kể cả Worker chết ở lần cuối) → ghi <c>dead_lettered_at</c>; bước đối soát
-///   nhận các job này để cập nhật trạng thái nghiệp vụ, đánh dấu <c>reconciled_at</c>.
+/// Durable PostgreSQL queue (no Redis needed at pilot scale).
+/// - Enqueue adds a row to the current DbContext so it commits with the business transaction (outbox).
+/// - Lease uses <c>FOR UPDATE SKIP LOCKED</c> so workers take jobs in parallel without overlap; leases expire.
+/// - Dead letter: when attempts run out (including a worker dying on the last one) <c>dead_lettered_at</c> is set;
+///   reconciliation then updates business state and stamps <c>reconciled_at</c>.
 /// </summary>
 internal sealed class PostgresJobQueue(DevAgentDbContext context, IOptions<JobQueueOptions> options, TimeProvider clock)
     : IJobQueue, IJobStore
@@ -22,7 +22,7 @@ internal sealed class PostgresJobQueue(DevAgentDbContext context, IOptions<JobQu
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Chống trùng ở cả hai mức: bản ghi đang chờ lưu trong DbContext và bản ghi đã có trong DB.
+        // Deduplicate against both pending rows in the DbContext and rows already in the database.
         var pendingDuplicate = context.ChangeTracker.Entries<JobRecord>()
             .Any(e => e.State == EntityState.Added && e.Entity.DeduplicationKey == request.DeduplicationKey);
         if (pendingDuplicate || await context.Jobs.AnyAsync(j => j.DeduplicationKey == request.DeduplicationKey, cancellationToken))
@@ -60,10 +60,10 @@ internal sealed class PostgresJobQueue(DevAgentDbContext context, IOptions<JobQu
         {
             await using var transaction = await context.Database.BeginTransactionAsync(ct);
 
-            // Khóa tư vấn trong giao dịch: tuần tự hóa việc nhận job giữa các Worker để không vượt trần đồng thời.
+            // Transaction-scoped advisory lock serializes leasing across workers so the concurrency cap holds.
             await context.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({LeaseLockKey})", ct);
 
-            // Lease hết hạn ở lần thử cuối (Worker chết giữa chừng): không nhận lại, chuyển dead-letter để đối soát.
+            // A lease that expired on the last attempt (the worker died): dead-letter it for reconciliation instead of re-leasing.
             await context.Database.ExecuteSqlAsync(
                 $"""
                  UPDATE devagent.jobs
@@ -207,7 +207,7 @@ internal sealed class PostgresJobQueue(DevAgentDbContext context, IOptions<JobQu
                  """)
             .ToListAsync(cancellationToken);
 
-    // Tên cột tường minh để không phụ thuộc naming convention khi ánh xạ kết quả SQL thô.
+    // Explicit column names keep raw SQL mapping independent of the naming convention.
     private sealed class LeasedJobRow
     {
         [Column("id")]

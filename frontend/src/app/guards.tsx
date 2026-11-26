@@ -11,7 +11,7 @@ function FullScreenLoader() {
   )
 }
 
-/** Trang cần đăng nhập. Tài khoản dùng mật khẩu tạm bị chuyển sang trang đổi mật khẩu. */
+/** Requires a session; accounts on a temporary password are sent to the password change page. */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { state } = useAuth()
   const location = useLocation()
@@ -31,7 +31,7 @@ export function RequireSuperAdmin({ children }: { children: ReactNode }) {
   return isSuperAdmin ? children : <Navigate to="/" replace />
 }
 
-/** Trang đăng nhập: đã đăng nhập thì về trang trước đó. */
+/** Sign-in page only: signed-in users go back to where they came from. */
 export function GuestOnly({ children }: { children: ReactNode }) {
   const { state } = useAuth()
   const location = useLocation()

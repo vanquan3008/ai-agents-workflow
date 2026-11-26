@@ -2,16 +2,9 @@ using DevAgent.Domain.Common;
 
 namespace DevAgent.Domain.Agents;
 
-public enum AgentInstanceStatus
-{
-    Idle = 1,
-    Busy = 2,
-    Stopped = 3,
-}
-
 /// <summary>
-/// Agent đang hoạt động (AgentInstance): một Worker đã đăng ký, gửi heartbeat định kỳ.
-/// Dùng để quan sát vận hành và phát hiện Worker chết; quyền nhận job do lease trong hàng đợi quyết định.
+/// A registered worker process that sends periodic heartbeats. Used to observe operations and detect dead workers;
+/// the right to process a job is decided by the queue lease, not by this record.
 /// </summary>
 public sealed class AgentInstance : AggregateRoot<AgentInstanceId>
 {
@@ -58,7 +51,7 @@ public sealed class AgentInstance : AggregateRoot<AgentInstanceId>
         LastHeartbeatAt = Guard.Utc(now, "heartbeat_at");
     }
 
-    /// <summary>Worker khởi động lại với cùng WorkerId: dùng lại bản ghi (WorkerId là khóa duy nhất).</summary>
+    /// <summary>Reuses the record when a worker restarts with the same id (WorkerId is unique).</summary>
     public void Restart(string hostName, DateTimeOffset now)
     {
         HostName = Guard.NotEmpty(hostName, "host_name", 200);

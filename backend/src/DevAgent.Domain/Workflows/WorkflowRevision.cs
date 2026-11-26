@@ -2,16 +2,9 @@ using DevAgent.Domain.Common;
 
 namespace DevAgent.Domain.Workflows;
 
-public readonly record struct WorkflowRevisionId(Guid Value)
-{
-    public static WorkflowRevisionId New() => new(Guid.CreateVersion7());
-
-    public override string ToString() => Value.ToString();
-}
-
 /// <summary>
-/// Một phiên bản quy trình của repo (append-only): ai đổi, khi nào, vì sao, nội dung gì.
-/// Dùng để audit và để biết task đã chạy theo phiên bản nào.
+/// One append-only version of a repository workflow: who changed it, when, why and to what.
+/// Used for auditing and for knowing which version a task ran with.
 /// </summary>
 public sealed class WorkflowRevision : AggregateRoot<WorkflowRevisionId>
 {

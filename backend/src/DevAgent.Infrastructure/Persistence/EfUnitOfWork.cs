@@ -8,11 +8,11 @@ using Npgsql;
 namespace DevAgent.Infrastructure.Persistence;
 
 /// <summary>
-/// Commit một giao dịch theo ba pha:
-/// 1) handler giao dịch (outbox) ghi thêm việc kèm theo vào cùng DbContext;
-/// 2) <c>SaveChanges</c> — một giao dịch duy nhất cho thay đổi nghiệp vụ + job + audit;
-/// 3) handler sau commit (realtime, best-effort).
-/// Dịch lỗi PostgreSQL sang ngoại lệ của Application để tầng trên không phụ thuộc EF/Npgsql.
+/// Commits in three phases:
+/// 1) transactional (outbox) handlers add side work to the same DbContext;
+/// 2) <c>SaveChanges</c> runs one transaction for the business change, jobs and audit entries;
+/// 3) after-commit handlers run (realtime, best effort).
+/// PostgreSQL errors are translated into application exceptions so upper layers stay free of EF/Npgsql.
 /// </summary>
 internal sealed class EfUnitOfWork(DevAgentDbContext context, DomainEventDispatcher dispatcher) : IUnitOfWork
 {

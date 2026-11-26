@@ -1,4 +1,6 @@
 using DevAgent.Application.Abstractions.Messaging;
+using DevAgent.Worker.Hosting;
+using DevAgent.Worker.Jobs;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;

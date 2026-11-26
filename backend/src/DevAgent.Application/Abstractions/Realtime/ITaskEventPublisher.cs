@@ -1,6 +1,6 @@
 namespace DevAgent.Application.Abstractions.Realtime;
 
-/// <summary>Sự kiện realtime gửi tới dashboard. Client dùng <see cref="Sequence"/> để đọc bù từ lịch sử đã lưu.</summary>
+/// <summary>Realtime event pushed to the dashboard. Clients use <see cref="Sequence"/> to replay persisted history.</summary>
 public sealed record TaskRealtimeEvent(
     Guid TaskId,
     Guid ProjectId,
@@ -11,8 +11,8 @@ public sealed record TaskRealtimeEvent(
     DateTimeOffset OccurredAt);
 
 /// <summary>
-/// Phát sự kiện realtime. Worker và API là hai tiến trình nên hiện thực dùng PostgreSQL NOTIFY,
-/// API LISTEN rồi đẩy qua SignalR. Phát sự kiện là best-effort; nguồn sự thật là DB.
+/// Publishes realtime events. The worker and API are separate processes, so the implementation uses PostgreSQL
+/// NOTIFY and the API relays to SignalR. Best effort only; the database remains the source of truth.
 /// </summary>
 public interface ITaskEventPublisher
 {

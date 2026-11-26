@@ -7,8 +7,8 @@ using Microsoft.Extensions.Options;
 namespace DevAgent.Infrastructure.Security;
 
 /// <summary>
-/// Mã hóa credential bằng AES-256-GCM. Định dạng: base64(version | nonce | tag | ciphertext).
-/// Khóa lấy từ <c>Security:EncryptionKey</c> (secret); thiếu khóa thì mọi thao tác mã hóa đều thất bại.
+/// AES-256-GCM credential encryption. Format: base64(version | nonce | tag | ciphertext).
+/// The key comes from <c>Security:EncryptionKey</c>; without it every operation fails.
 /// </summary>
 internal sealed class AesGcmSecretProtector(IOptions<SecurityOptions> options) : ISecretProtector
 {
@@ -37,7 +37,7 @@ internal sealed class AesGcmSecretProtector(IOptions<SecurityOptions> options) :
         var input = Convert.FromBase64String(protectedValue);
         if (input.Length < 1 + NonceSize + TagSize || input[0] != Version)
         {
-            throw new CryptographicException("Dữ liệu mã hóa không hợp lệ hoặc sai phiên bản.");
+            throw new CryptographicException("Encrypted payload is invalid or has an unsupported version.");
         }
 
         var key = Key();
@@ -49,6 +49,6 @@ internal sealed class AesGcmSecretProtector(IOptions<SecurityOptions> options) :
 
     private byte[] Key() =>
         string.IsNullOrWhiteSpace(options.Value.EncryptionKey)
-            ? throw new InvalidOperationException("Chưa cấu hình Security:EncryptionKey.")
+            ? throw new InvalidOperationException("Security:EncryptionKey is not configured.")
             : Convert.FromBase64String(options.Value.EncryptionKey);
 }

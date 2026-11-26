@@ -22,8 +22,8 @@ export type SessionState =
 type Listener = (state: SessionState) => void
 
 /**
- * Kho phiên đăng nhập trong bộ nhớ (không lưu localStorage để XSS không lấy được token lâu dài).
- * Access token ngắn hạn; refresh token nằm trong cookie httpOnly do API đặt, JavaScript không đọc được.
+ * In-memory session store (never localStorage, so XSS cannot steal a long-lived token).
+ * The access token is short-lived; the refresh token lives in an HttpOnly cookie that JavaScript cannot read.
  */
 class SessionStore {
   private state: SessionState = { status: 'loading' }
@@ -57,7 +57,7 @@ class SessionStore {
     this.set({ status: 'anonymous' })
   }
 
-  /** Đổi refresh token (cookie) lấy access token mới. Gộp các lời gọi đồng thời thành một (single-flight). */
+  /** Exchanges the refresh cookie for a new access token; concurrent callers share one request (single flight). */
   refresh(): Promise<boolean> {
     this.refreshing ??= this.doRefresh().finally(() => {
       this.refreshing = null
@@ -83,13 +83,13 @@ class SessionStore {
       this.apply(result)
       return true
     } catch {
-      // Mất mạng: giữ trạng thái hiện tại nếu đang đăng nhập, lần gọi API sau sẽ thử lại.
+      // Offline: keep an authenticated state; the next API call retries.
       if (generation === this.generation && this.state.status === 'loading') this.clear()
       return false
     }
   }
 
-  /** Làm mới trước khi access token hết hạn 60 giây. */
+  /** Refreshes 60 seconds before the access token expires. */
   private schedule() {
     clearTimeout(this.timer)
     if (this.state.status !== 'authenticated') return

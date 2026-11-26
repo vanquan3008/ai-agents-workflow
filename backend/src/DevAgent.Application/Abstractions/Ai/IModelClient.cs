@@ -8,15 +8,12 @@ public enum ModelRole
 
 public sealed record ModelMessage(ModelRole Role, string Content);
 
-/// <summary>
-/// Hợp đồng gọi model độc lập nhà cung cấp (checklist 0.5). Application chỉ biết hợp đồng này;
-/// adapter trong Infrastructure ánh xạ sang SDK cụ thể. Đổi nhà cung cấp qua cấu hình <c>Ai:Provider</c>.
-/// </summary>
-/// <param name="Purpose">Mục đích gọi (planner/coding/reviewer) để ghi trace và chọn model theo cấu hình.</param>
-/// <param name="SystemPrompt">Chỉ dẫn của hệ thống. Nội dung repo/issue không bao giờ đặt ở đây.</param>
-/// <param name="Messages">Hội thoại; nội dung không tin cậy được bọc và đánh dấu là dữ liệu.</param>
-/// <param name="MaxOutputTokens">Trần đầu ra cho lần gọi này.</param>
-/// <param name="ModelOverride">Model id cụ thể; null dùng model mặc định của <paramref name="Purpose"/>.</param>
+/// <summary>Provider-neutral model call. Adapters map it to a vendor SDK; the provider is selected by <c>Ai:Provider</c>.</summary>
+/// <param name="Purpose">Call purpose (planner/coding/reviewer), used for tracing and default model selection.</param>
+/// <param name="SystemPrompt">System instructions. Repository or issue content is never placed here.</param>
+/// <param name="Messages">Conversation; untrusted content is wrapped and marked as data.</param>
+/// <param name="MaxOutputTokens">Output cap for this call.</param>
+/// <param name="ModelOverride">Explicit model id; null uses the default for <paramref name="Purpose"/>.</param>
 public sealed record ModelRequest(
     string Purpose,
     string SystemPrompt,
@@ -36,7 +33,7 @@ public sealed record ModelUsage(long InputTokens, long OutputTokens, long CacheR
 
 public sealed record ModelResponse(string Text, ModelStopReason StopReason, string? StopDetail, ModelUsage Usage, string Model);
 
-/// <summary>Đơn giá theo model (USD / 1 triệu token), dùng để giới hạn trần đầu ra theo ngân sách còn lại.</summary>
+/// <summary>Price per million tokens in USD, used to cap output against the remaining budget.</summary>
 public sealed record ModelPrice(decimal InputPerMillion, decimal OutputPerMillion, decimal CacheReadPerMillion)
 {
     public static ModelPrice Free { get; } = new(0m, 0m, 0m);
@@ -46,10 +43,10 @@ public interface IModelClient
 {
     string ProviderName { get; }
 
-    /// <summary>Model sẽ dùng cho một mục đích, để ghi vào AgentExecution trước khi gọi.</summary>
+    /// <summary>The model that will serve a purpose, recorded on the execution before the call.</summary>
     string ResolveModel(string purpose);
 
-    /// <summary>Đơn giá của model; null nếu chưa cấu hình (khi đó hệ thống từ chối gọi để không vượt ngân sách).</summary>
+    /// <summary>Null when unpriced; callers then refuse the call because the budget cannot be guaranteed.</summary>
     ModelPrice? GetPrice(string model);
 
     Task<ModelResponse> CompleteAsync(ModelRequest request, CancellationToken cancellationToken);

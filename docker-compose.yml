@@ -1,15 +1,15 @@
-# Môi trường pilot/dev chạy được từ máy sạch (checklist 1.2):
+# Pilot/dev environment that runs from a clean machine:
 #   cp .env.example .env && docker compose up -d --build
 # Dashboard: http://localhost:8080 · API: http://localhost:5080 · Postgres: localhost:5432
-# Thêm trace/metric/log UI: docker compose --profile observability up -d
-# Dùng GitHub App thật: docker compose -f docker-compose.yml -f docker-compose.github-app.yml up -d
+# Add the trace/metric/log UI: docker compose --profile observability up -d
+# Use the real GitHub App: docker compose -f docker-compose.yml -f docker-compose.github-app.yml up -d
 
 name: devagent
 
 x-backend-env: &backend-env
   ASPNETCORE_ENVIRONMENT: ${APP_ENVIRONMENT:-Development}
   DOTNET_ENVIRONMENT: ${APP_ENVIRONMENT:-Development}
-  ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-devagent};Username=${POSTGRES_USER:-devagent};Password=${POSTGRES_PASSWORD:?Thiếu POSTGRES_PASSWORD trong .env}
+  ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=${POSTGRES_DB:-devagent};Username=${POSTGRES_USER:-devagent};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
   PublicUrls__Dashboard: ${PUBLIC_DASHBOARD_URL:-http://localhost:8080}
   Observability__ConsoleFormat: ${LOG_FORMAT:-json}
   Observability__OtlpEndpoint: ${OTLP_ENDPOINT:-}
@@ -29,7 +29,7 @@ x-backend-env: &backend-env
   Discord__ApplicationId: ${DISCORD_APPLICATION_ID:-}
   Discord__GuildId: ${DISCORD_GUILD_ID:-}
   Discord__NotificationChannelId: ${DISCORD_NOTIFICATION_CHANNEL_ID:-}
-  # Bảo mật & hạn mức
+  # Security & limits
   Security__EncryptionKey: ${ENCRYPTION_KEY:-}
   AgentLimits__MaxCostUsdPerTask: ${MAX_COST_USD_PER_TASK:-2.00}
   AgentLimits__TaskTimeoutMinutes: ${TASK_TIMEOUT_MINUTES:-60}
@@ -42,9 +42,10 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-devagent}
       POSTGRES_USER: ${POSTGRES_USER:-devagent}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Thiếu POSTGRES_PASSWORD trong .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    # Bound to loopback: the database must not be reachable from other machines on the network.
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -62,11 +63,11 @@ services:
     environment:
       <<: *backend-env
       Database__ApplyMigrationsOnStartup: ${APPLY_MIGRATIONS:-true}
-      Auth__Jwt__SigningKey: ${AUTH_JWT_SIGNING_KEY:?Đặt AUTH_JWT_SIGNING_KEY trong .env}
+      Auth__Jwt__SigningKey: ${AUTH_JWT_SIGNING_KEY:?Set AUTH_JWT_SIGNING_KEY in .env}
       Auth__Jwt__Audience: devagent-api
       Auth__RefreshCookie__Secure: ${AUTH_COOKIE_SECURE:-false}
       Bootstrap__SuperAdmin__Email: ${BOOTSTRAP_ADMIN_EMAIL:-admin@devagent.local}
-      Bootstrap__SuperAdmin__Password: ${BOOTSTRAP_ADMIN_PASSWORD:?Đặt BOOTSTRAP_ADMIN_PASSWORD trong .env}
+      Bootstrap__SuperAdmin__Password: ${BOOTSTRAP_ADMIN_PASSWORD:?Set BOOTSTRAP_ADMIN_PASSWORD in .env}
       Cors__AllowedOrigins__0: ${PUBLIC_DASHBOARD_URL:-http://localhost:8080}
       Cors__AllowedOrigins__1: http://localhost:5173
     ports:
@@ -86,7 +87,7 @@ services:
       Worker__MaxConcurrentJobs: ${WORKER_MAX_CONCURRENT_JOBS:-2}
     depends_on:
       api:
-        condition: service_healthy   # API áp migration xong mới chạy Worker
+        condition: service_healthy   # the worker starts after the API applied migrations
     deploy:
       replicas: ${WORKER_REPLICAS:-1}
 
@@ -95,7 +96,7 @@ services:
       context: ./frontend
     image: devagent-web:local
     restart: unless-stopped
-    # Cấu hình runtime: container sinh /config.js từ các biến này lúc khởi động (cùng image cho mọi môi trường).
+    # Runtime configuration: the container renders /config.js from these variables at startup (one image for every environment).
     environment:
       DEVAGENT_ENVIRONMENT: ${APP_ENVIRONMENT:-Development}
       DEVAGENT_API_BASE_URL: ""
@@ -106,7 +107,7 @@ services:
       api:
         condition: service_healthy
 
-  # Grafana + Tempo + Loki + Prometheus + OTel Collector trong một container (chỉ dùng cho dev).
+  # Grafana + Tempo + Loki + Prometheus + OTel Collector in one container (development only).
   otel-lgtm:
     image: grafana/otel-lgtm:latest
     profiles: ["observability"]

@@ -8,7 +8,7 @@ internal static class RateLimitPolicies
     public const string TaskCreation = "task-creation";
     public const string Auth = "auth";
 
-    /// <summary>Giới hạn tạo task theo người dùng để chặn spam và chi phí model ngoài ý muốn.</summary>
+    /// <summary>Per-user task creation limit to stop spam and runaway model spend.</summary>
     public static IServiceCollection AddDevAgentRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
         var permitPerMinute = configuration.GetValue("RateLimiting:TaskCreationPerMinute", 10);
@@ -25,7 +25,7 @@ internal static class RateLimitPolicies
                     QueueLimit = 0,
                 }));
 
-            // Chống dò mật khẩu: giới hạn theo IP cho đăng nhập/refresh/đổi mật khẩu.
+            // Brute-force protection: per-IP limit on sign-in, refresh and password change.
             options.AddPolicy(Auth, context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
                 _ => new FixedWindowRateLimiterOptions

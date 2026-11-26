@@ -18,8 +18,8 @@ namespace DevAgent.Infrastructure.Observability;
 public static class ObservabilityExtensions
 {
     /// <summary>
-    /// Log có cấu trúc bằng Serilog (cấu hình trong section "Serilog") và trace/metric bằng OpenTelemetry
-    /// (checklist 1.5). Dữ liệu nhạy cảm được che trước khi ghi.
+    /// Structured logging with Serilog (configured in the "Serilog" section) plus OpenTelemetry traces and metrics.
+    /// Sensitive data is redacted before it is written.
     /// </summary>
     public static IHostApplicationBuilder AddDevAgentObservability(
         this IHostApplicationBuilder builder,
@@ -43,7 +43,7 @@ public static class ObservabilityExtensions
             .Enrich.With<SensitiveDataMaskingEnricher>()
             .Enrich.With<TraceContextEnricher>();
 
-            // Sink console chọn bằng cấu hình thay vì mảng WriteTo (mảng bị gộp theo chỉ số giữa các file appsettings).
+            // The console sink is chosen here rather than via a WriteTo array, which appsettings files merge by index.
             if (observability.ConsoleFormat == "text")
             {
                 logger.WriteTo.Console(

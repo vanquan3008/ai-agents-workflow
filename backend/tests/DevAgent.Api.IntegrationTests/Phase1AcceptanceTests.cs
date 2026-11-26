@@ -11,8 +11,8 @@ using Shouldly;
 namespace DevAgent.Api.IntegrationTests;
 
 /// <summary>
-/// Kịch bản nghiệm thu Phase 1 trên PostgreSQL thật: gửi lặp chỉ sinh một task, người ngoài project bị từ chối,
-/// hai Worker nhận việc không trùng.
+/// Phase 1 acceptance scenarios on real PostgreSQL: repeated submissions create one task, outsiders are denied,
+/// and two workers never lease the same job.
 /// </summary>
 public sealed class Phase1AcceptanceTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
@@ -141,7 +141,7 @@ public sealed class Phase1AcceptanceTests(ApiFactory factory) : IClassFixture<Ap
     {
         Assert.SkipUnless(factory.DockerAvailable, "Cần Docker.");
         var ct = TestContext.Current.CancellationToken;
-        _ = factory.CreateClient(); // khởi động host để áp migration
+        _ = factory.CreateClient(); // start the host to apply migrations
 
         using (var scope = factory.Services.CreateScope())
         {

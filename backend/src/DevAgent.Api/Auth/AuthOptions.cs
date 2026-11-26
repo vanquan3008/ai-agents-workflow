@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace DevAgent.Api.Auth;
 
-/// <summary>Phát hành và kiểm tra access token JWT (HS256) do chính DevAgent cấp.</summary>
+/// <summary>Settings for issuing and validating DevAgent's own HS256 JWT access tokens.</summary>
 public sealed class JwtOptions
 {
     [Required]
@@ -13,10 +13,10 @@ public sealed class JwtOptions
     [Required]
     public string Audience { get; set; } = "devagent-api";
 
-    /// <summary>Secret ký token, tối thiểu 32 byte. Cấp qua biến môi trường <c>Auth__Jwt__SigningKey</c>.</summary>
+    /// <summary>Signing secret, at least 32 bytes, supplied through <c>Auth__Jwt__SigningKey</c>.</summary>
     public string? SigningKey { get; set; }
 
-    /// <summary>Access token ngắn hạn; phiên dài hơn do refresh token xoay vòng đảm nhận.</summary>
+    /// <summary>Short-lived access token; longer sessions rely on rotating refresh tokens.</summary>
     [Range(1, 120)]
     public int AccessTokenMinutes { get; set; } = 15;
 }
@@ -26,7 +26,7 @@ public sealed class RefreshCookieOptions
     [Required]
     public string Name { get; set; } = "devagent_rt";
 
-    /// <summary>Chỉ gửi qua HTTPS. Tắt ở môi trường phát triển chạy http://localhost.</summary>
+    /// <summary>HTTPS-only cookie. Disable for local development over http://localhost.</summary>
     public bool Secure { get; set; } = true;
 }
 

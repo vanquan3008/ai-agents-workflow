@@ -1,6 +1,7 @@
-using DevAgent.Application.Abstractions.Persistence;
 using DevAgent.Application.Abstractions.Security;
 using DevAgent.Domain.Common;
+using DevAgent.Domain.Users;
+using DevAgent.Domain.Users.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -43,7 +44,7 @@ internal static class AuthExtensions
                 };
                 bearer.Events = new JwtBearerEvents
                 {
-                    // WebSocket không gửi được header Authorization: SignalR truyền token qua query.
+                    // WebSockets cannot send an Authorization header, so SignalR passes the token in the query string.
                     OnMessageReceived = context =>
                     {
                         var token = context.Request.Query["access_token"];
@@ -55,7 +56,7 @@ internal static class AuthExtensions
                         return Task.CompletedTask;
                     },
 
-                    // Token hợp lệ về chữ ký nhưng tài khoản đã bị khóa/đổi mật khẩu/đổi vai trò thì từ chối ngay.
+                    // Reject validly signed tokens immediately once the account was deactivated or its password/role changed.
                     OnTokenValidated = async context =>
                     {
                         var sub = context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -83,7 +84,7 @@ internal static class AuthExtensions
     }
 
     /// <summary>
-    /// Tài khoản đang dùng mật khẩu tạm chỉ được gọi các endpoint xác thực (xem, đổi mật khẩu, đăng xuất).
+    /// Accounts on a temporary password may only call the auth endpoints (read self, change password, sign out).
     /// </summary>
     public static RouteGroupBuilder RequirePasswordChanged(this RouteGroupBuilder group) =>
         group.AddEndpointFilter(async (context, next) =>

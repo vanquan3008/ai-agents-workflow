@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace DevAgent.Api.IntegrationTests;
 
 /// <summary>
-/// Dữ liệu chỉ dùng cho test (production chỉ seed Super Admin). Định danh cố định để các test tham chiếu.
+/// Test-only data (production seeds only the super admin). Fixed identifiers let tests reference it.
 /// </summary>
 public static class TestData
 {

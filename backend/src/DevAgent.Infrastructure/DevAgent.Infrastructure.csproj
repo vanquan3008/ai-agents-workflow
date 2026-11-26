@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Infrastructure: EF Core/PostgreSQL, hàng đợi bền vững, adapter GitHub/Discord/AI/sandbox. -->
+  <!-- Infrastructure: EF Core/PostgreSQL, durable queue and GitHub/Discord/AI/sandbox adapters. -->
   <PropertyGroup>
     <RootNamespace>DevAgent.Infrastructure</RootNamespace>
   </PropertyGroup>

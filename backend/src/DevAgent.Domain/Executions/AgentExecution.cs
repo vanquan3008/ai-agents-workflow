@@ -2,47 +2,9 @@ using DevAgent.Domain.Common;
 
 namespace DevAgent.Domain.Executions;
 
-/// <summary>Các bước trong luồng tuần tự của Orchestrator (checklist 0.5).</summary>
-public enum AgentStep
-{
-    Planner = 1,
-    Coding = 2,
-    Testing = 3,
-    Reviewer = 4,
-    Publisher = 5,
-}
-
-public enum ExecutionStatus
-{
-    Running = 1,
-    Succeeded = 2,
-    Failed = 3,
-    Cancelled = 4,
-    TimedOut = 5,
-    BudgetExceeded = 6,
-}
-
-/// <summary>Lượng token và chi phí ước tính. Chi phí tính bằng USD dạng decimal để tránh sai số.</summary>
-public sealed record TokenUsage(long InputTokens, long OutputTokens, long CacheReadTokens, decimal EstimatedCostUsd)
-{
-    public static TokenUsage Zero { get; } = new(0, 0, 0, 0m);
-
-    public long TotalTokens => InputTokens + OutputTokens;
-
-    public TokenUsage Add(TokenUsage other)
-    {
-        ArgumentNullException.ThrowIfNull(other);
-        return new(
-            InputTokens + other.InputTokens,
-            OutputTokens + other.OutputTokens,
-            CacheReadTokens + other.CacheReadTokens,
-            EstimatedCostUsd + other.EstimatedCostUsd);
-    }
-}
-
 /// <summary>
-/// Một lần chạy của một bước agent cho một task (AgentExecution).
-/// Lưu checkpoint để Worker khác tiếp tục khi lease hết hạn, cùng token/chi phí/thời lượng.
+/// One run of one agent step for a task. Stores a checkpoint so another worker can resume after a lease
+/// expires, together with token usage, cost and duration.
 /// </summary>
 public sealed class AgentExecution : AggregateRoot<ExecutionId>
 {
@@ -92,10 +54,10 @@ public sealed class AgentExecution : AggregateRoot<ExecutionId>
 
     public TokenUsage Usage { get; private set; }
 
-    /// <summary>Số lần gọi model trong lần chạy này (để áp trần số lần gọi mỗi task).</summary>
+    /// <summary>Model calls made in this run, counted against the per-task call limit.</summary>
     public int ModelCalls { get; private set; }
 
-    /// <summary>Trạng thái tiến độ dạng JSON do bước agent tự định nghĩa (điểm lưu tiến độ).</summary>
+    /// <summary>Step-defined JSON progress marker used to resume work.</summary>
     public string? Checkpoint { get; private set; }
 
     public string? Error { get; private set; }
@@ -133,7 +95,7 @@ public sealed class AgentExecution : AggregateRoot<ExecutionId>
             Guard.Utc(now, "started_at"));
     }
 
-    /// <summary>Ghi nhận một lần gọi model và lượng token/chi phí của nó.</summary>
+    /// <summary>Counts a model call and adds its usage.</summary>
     public void RecordModelCall(TokenUsage usage)
     {
         ArgumentNullException.ThrowIfNull(usage);
@@ -142,7 +104,7 @@ public sealed class AgentExecution : AggregateRoot<ExecutionId>
         ModelCalls++;
     }
 
-    /// <summary>Cập nhật usage khi cuộc gọi đã ghi nhận trả kết quả.</summary>
+    /// <summary>Adds usage reported by a call that was already counted.</summary>
     public void RecordUsage(TokenUsage usage)
     {
         ArgumentNullException.ThrowIfNull(usage);

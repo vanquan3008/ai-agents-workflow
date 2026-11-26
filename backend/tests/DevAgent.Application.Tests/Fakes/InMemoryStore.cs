@@ -5,19 +5,28 @@ using DevAgent.Application.Abstractions.Security;
 using DevAgent.Application.Common;
 using DevAgent.Application.Features.Projects;
 using DevAgent.Domain.Agents;
+using DevAgent.Domain.Agents.Repositories;
 using DevAgent.Domain.Approvals;
+using DevAgent.Domain.Approvals.Repositories;
 using DevAgent.Domain.Auditing;
+using DevAgent.Domain.Auditing.Repositories;
 using DevAgent.Domain.Common;
 using DevAgent.Domain.Executions;
+using DevAgent.Domain.Executions.Repositories;
 using DevAgent.Domain.Projects;
+using DevAgent.Domain.Projects.Repositories;
 using DevAgent.Domain.Repositories;
+using DevAgent.Domain.Repositories.Repositories;
 using DevAgent.Domain.Tasks;
+using DevAgent.Domain.Tasks.Repositories;
 using DevAgent.Domain.Users;
+using DevAgent.Domain.Users.Repositories;
 using DevAgent.Domain.Workflows;
+using DevAgent.Domain.Workflows.Repositories;
 
 namespace DevAgent.Application.Tests.Fakes;
 
-/// <summary>Kho dữ liệu trong bộ nhớ hiện thực các port của Application, đủ để kiểm thử use case mà không cần DB.</summary>
+/// <summary>In-memory implementation of the application ports, enough to test use cases without a database.</summary>
 internal sealed class InMemoryStore :
     IUnitOfWork, IUserRepository, IProjectRepository, ICodeRepositoryRepository, ITaskRepository,
     IExecutionRepository, IApprovalRepository, IAgentInstanceRepository, IAuditLog, IJobQueue, IProjectQueries, IWorkflowRevisionRepository

@@ -1,73 +1,73 @@
-# Checklist phát triển DevAgent MVP
+# DevAgent MVP checklist
 
-**Mốc bàn giao** — Người dùng mô tả lỗi trên Discord và nhận mã task. Với lỗi thông thường trên repo đã đăng ký, DevAgent tự lập kế hoạch, sửa trên nhánh riêng trong sandbox, chạy build/test và review diff. Khi các kiểm tra đạt, bot mở pull request (PR) và gửi link về Discord cùng tóm tắt bản sửa và kết quả test. Con người quyết định merge trên GitHub.
+The MVP accepts a bug report from Discord and returns a task ID. For an ordinary bug in an approved repository, DevAgent plans the fix, makes it on a dedicated branch inside an isolated sandbox, runs build and tests, and reviews the diff. When the gates pass, the bot opens a pull request (PR) and reports the link, change summary, and test evidence. A human decides whether to merge on GitHub.
 
-**Chính sách cho pilot** — Chủ repo cấu hình trước phạm vi được sửa và các vùng nhạy cảm. Bản sửa nằm trong phạm vi tự động được đi thẳng đến PR. Thay đổi liên quan đến xác thực, phân quyền, migration, credential, CI/CD hoặc thao tác phá hủy cần người có quyền duyệt trước khi thực hiện và duyệt diff trước khi xuất bản. Khi chưa phân loại được, hệ thống dừng để người phụ trách xem xét. Triển khai production và cấp thêm quyền cho agent nằm ngoài phạm vi pilot.
+For the pilot, repository owners define which paths may be changed automatically and which areas require approval. Changes involving authentication, authorization, migrations, credentials, CI/CD, or destructive actions require approval before execution and diff approval before publishing. If the policy cannot classify the change, pause for human review. Production deployment and expanding agent permissions are outside the pilot scope.
 
-**Cách dùng** — Bắt đầu ở Phase 0. Mỗi ô chỉ được đánh dấu khi có bằng chứng tương ứng, chẳng hạn tài liệu được duyệt, kết quả test, bản ghi audit hoặc liên kết PR. Các mục Phase 1 và 2 là backlog triển khai sau khi chủ dự án duyệt thiết kế.
+Mark an item complete once its evidence is available, such as an approved design, test result, audit entry, or PR link. The [README](../README.md) and [implementation roadmap](IMPLEMENTATION_ROADMAP.md) describe current progress.
 
-## Phase 0 · Chốt thiết kế trước khi viết tính năng
+## Phase 0 · Approve the pilot design
 
-- [ ] **0.1 Chốt bài toán pilot.** Viết yêu cầu sản phẩm ngắn, nêu người giao việc, người duyệt, repo thử nghiệm, ba kênh nhận việc (Discord, GitHub Issue, dashboard) và quyền của từng người. Chọn một lỗi có thể tái hiện bằng test, chẳng hạn bộ lọc trả về task sai trạng thái. Ghi trước hành vi mong đợi và cách kiểm tra bản sửa.
-- [ ] **0.2 Vẽ kiến trúc và ranh giới dữ liệu.** Có sơ đồ ngữ cảnh và sơ đồ thành phần cho API, Worker, dashboard, PostgreSQL, sandbox, nhà cung cấp AI, GitHub và Discord. Trong modular monolith, chỉ rõ module nào sở hữu task, lần thực thi, quyền truy cập repo, quyết định duyệt và PR. Ghi đường đi của một yêu cầu qua các thành phần.
-- [ ] **0.3 Duyệt mô hình domain và ERD.** Thể hiện Project–Repository, Task–Execution, Execution–ToolExecution, Task–Approval và liên kết đến PR. Phân biệt cấu hình agent (`AgentProfile`), agent đang hoạt động (`AgentInstance`) và một lần chạy (`AgentExecution`). Ghi khóa duy nhất chống trùng, quan hệ, chỉ mục cho hàng đợi/timeline, thời gian UTC và cách xử lý cập nhật đồng thời.
-- [ ] **0.4 Chốt vòng đời task và phê duyệt.** Vẽ sơ đồ từ `PENDING` đến `COMPLETED`, gồm nhánh tự động và nhánh `WAITING_FOR_APPROVAL` cho kế hoạch hoặc diff nhạy cảm. Với mỗi chuyển trạng thái, ghi tác nhân, điều kiện và dữ liệu cần lưu. Quy định cách xử lý từ chối, thiếu thông tin, lỗi, chặn, thử lại, hết giờ và hủy.
-- [ ] **0.5 Thiết kế luồng agent.** Vẽ cách Orchestrator điều phối lần lượt Planner, Coding, Testing và Reviewer, gồm cả nhánh build/test lỗi. Đề xuất một luồng tuần tự cho pilot. Ghi đầu vào, đầu ra, quyền dùng công cụ, điểm lưu tiến độ và điều kiện dừng của từng bước. Định nghĩa hợp đồng gọi model trong Application để có thể đổi nhà cung cấp qua cấu hình và adapter.
-- [ ] **0.6 Duyệt hợp đồng API và giao diện.** Phác thảo `/api/v1/` cho đăng ký repo, tạo/xem/hủy task, xem lần chạy và duyệt/từ chối. Chốt DTO, lỗi, phân trang, khóa chống gửi trùng, sự kiện SignalR. Vẽ ba màn hình chính gồm danh sách task, chi tiết lần chạy và màn hình phê duyệt.
-- [ ] **0.7 Duyệt mô hình đe dọa và hạn mức.** Xác định ranh giới tin cậy giữa người dùng, nội dung repo/issue, model, sandbox và dịch vụ giữ credentials. Chốt cách ly, chính sách mạng, quyền công cụ và thao tác cần duyệt. Điền con số cho ngân sách mỗi task, timeout, số lần thử và số task đồng thời để nhóm có thể kiểm thử.
-- [ ] **0.8 Duyệt quyết định kỹ thuật và roadmap.** Ghi phiên bản tương thích cần dùng cho .NET 10, EF Core/Npgsql, PostgreSQL, React 19 và các SDK tích hợp. Đề xuất PostgreSQL giữ trạng thái và hàng đợi bền vững cho pilot. Ghi rõ nhu cầu nào sẽ kích hoạt việc dùng Redis. Chủ dự án duyệt phạm vi, sơ đồ, ERD, chính sách và các kịch bản nghiệm thu cuối tài liệu trước khi mở Phase 1.
+- [ ] **0.1 Define the pilot.** Identify who submits work and approves changes, the pilot repository, the Discord, GitHub Issue, and dashboard entry points, and each role's permissions. Select a reproducible bug, record the intended behavior, and define how to verify the fix.
+- [ ] **0.2 Review architecture and data ownership.** Map API, Worker, dashboard, PostgreSQL, sandbox, AI provider, GitHub, and Discord. Identify the modules that own tasks, executions, repository access, approval decisions, and PR links. Trace a request through them. See the [current architecture](../README.md#current-architecture).
+- [ ] **0.3 Review the domain model and relationships.** Cover projects and repositories, tasks and executions, tools, approvals, and PR links. Distinguish `AgentProfile`, `AgentInstance`, and `AgentExecution`. Record idempotency keys, relationships, queue and timeline indexes, UTC timestamps, and concurrency handling. See the [domain relationships](audit/ARCHITECTURE_REVIEW.md#domain-relationships).
+- [ ] **0.4 Approve the task and approval lifecycle.** Map `PENDING` to `COMPLETED`, including automatic progression and plan or diff approval. Define the actor, guards, and persisted data for each transition, including rejection, clarification, failure, blocking, retry, timeout, and cancellation.
+- [ ] **0.5 Design agent execution.** Define the pilot's sequential Planner, Coding, Testing, and Reviewer steps and the failed build or test path. Specify inputs, outputs, tool permissions, checkpoints, and exit conditions. Keep model selection behind an Application port with configurable adapters.
+- [ ] **0.6 Approve API and dashboard contracts.** Define `/api/v1/` for registration, task creation, reads, cancellation, executions, and approval decisions. Cover DTOs, errors, pagination, idempotency, and SignalR events. Design task list, execution detail, and approval views.
+- [ ] **0.7 Approve the threat model and limits.** Identify trust boundaries for users, repository and issue content, models, the sandbox, and credential storage. Specify isolation, network policy, tool permissions, approval gates, per-task budgets, timeouts, attempts, and concurrency.
+- [ ] **0.8 Approve technology choices and the roadmap.** Record compatible .NET 10, EF Core/Npgsql, PostgreSQL, React 19, and integration SDK versions. Use PostgreSQL for pilot state and durable jobs and identify what measured load would justify Redis. Obtain sign-off for the scope, diagrams, domain model, policy, and acceptance scenarios.
 
-## Phase 1 · Nền tảng chạy được từ máy sạch
+## Phase 1 · Run the foundation from a clean checkout
 
-- [ ] **1.1 Khởi tạo backend và frontend.** Có ASP.NET Core API, Worker dùng BackgroundService, đăng ký module tường minh và migration đầu tiên. Domain độc lập với EF, Discord, GitHub và SDK AI. Frontend dùng React, Vite, TypeScript strict, cấu trúc theo tính năng và API client chung.
-- [ ] **1.2 Dựng môi trường phát triển và CI.** Docker Compose khởi động được các dịch vụ cần cho pilot. Có health check, cấu hình mẫu và nơi cấp secret riêng. GitHub Actions build backend/frontend, chạy test, kiểm tra TypeScript và áp dụng migration lên PostgreSQL mới.
-- [ ] **1.3 Xác thực và phân quyền.** API kiểm tra quyền theo project/repo và hành động. Liên kết danh tính Discord/GitHub với quyền trong DevAgent. Kiểm thử người có quyền giao việc, người có quyền duyệt và người ngoài project. Áp dụng cùng chính sách cho dữ liệu đọc và sự kiện SignalR.
-- [ ] **1.4 Lưu task và chạy job bền vững.** Lưu task cùng công việc cần xử lý trong một giao dịch. Worker nhận việc có thời hạn, ghi checkpoint, thử lại có giới hạn và lưu việc thất bại để người vận hành xử lý. Thử dừng Worker giữa chừng và chạy hai Worker cùng nhận việc.
-- [ ] **1.5 Truy vết và kiểm thử tự động.** Log có cấu trúc bằng Serilog, trace/metric qua OpenTelemetry, liên kết theo task ID và execution ID. Che dữ liệu nhạy cảm trước khi ghi. Có test domain, API, phân quyền và tích hợp PostgreSQL. Dùng nhà cung cấp AI giả lập có kết quả cố định trong CI.
+- [ ] **1.1 Bootstrap backend and frontend.** Provide an ASP.NET Core API, a hosted Worker, explicit module registration, and the first migration. Keep the domain independent of frameworks and integration SDKs. Use React, Vite, strict TypeScript, feature folders, and a shared API client.
+- [ ] **1.2 Set up development and CI.** Provide Docker Compose, readiness checks, example configuration, and separate secret storage. Build and test backend and frontend in GitHub Actions, check TypeScript, and apply migrations to PostgreSQL from scratch.
+- [ ] **1.3 Implement identity and access.** Enforce project-, repository-, and action-level permissions. Map Discord and GitHub identities. Test submitter and approver permissions and access denials for outsiders. Apply the same project policy to reads and SignalR subscriptions.
+- [ ] **1.4 Persist tasks and process durable jobs.** Store the task and job atomically. Lease jobs, record checkpoints, retry within limits, and retain failed jobs for operators. Verify recovery after Worker termination and concurrent leasing by two Workers.
+- [ ] **1.5 Add observability and automated coverage.** Correlate Serilog logs and OpenTelemetry traces and metrics with task and execution IDs. Redact secrets. Run domain, API, permission, and PostgreSQL integration tests with deterministic fake AI.
 
-**Nghiệm thu Phase 1** — Từ checkout sạch, chạy được hệ thống và CI. Gửi lặp cùng yêu cầu chỉ sinh một task. Khởi động lại Worker vẫn xử lý được task đó và giữ lịch sử. Người ngoài project bị từ chối khi đọc task hoặc đăng ký nhận sự kiện của nó.
+**Acceptance.** Start the stack from a clean checkout and pass CI. Submitting the same request twice yields one task. A Worker restart preserves its progress and history. Users outside the project cannot read the task or subscribe to its events.
 
-## Phase 2 · Triển khai theo thứ tự phụ thuộc
+## Phase 2 · Deliver the pilot workflow
 
-### 2A · Một task đi được từ API tới repo thử nghiệm
+### 2A · Connect the API to the pilot repository
 
-- [ ] Cài GitHub App với quyền tối thiểu, đăng ký repo theo installation và project. Lưu credential có mã hóa, cấp token ngắn hạn qua thành phần tích hợp và giữ token ngoài ngữ cảnh model.
-- [ ] Cho phép người có quyền tạo task qua API và nhận task ID. Lưu nguồn yêu cầu, repo đích, base commit và khóa chống trùng. Planner đọc cấu trúc repo, xuất kế hoạch, tiêu chí kiểm tra và rủi ro. Task thiếu yêu cầu chuyển sang `NEEDS_CLARIFICATION`.
-- [ ] Bộ điều phối áp dụng chính sách của repo lên kế hoạch và kiểm tra lại trước mỗi thao tác ghi. Ghi lý do cho phép đi tiếp hoặc yêu cầu duyệt. Nếu đang sửa mà cần chạm vùng nhạy cảm, dừng trước thao tác đó và gửi yêu cầu qua Discord. Gắn quyết định duyệt với người duyệt, thời điểm, phạm vi và phiên bản kế hoạch.
+- [ ] Install a least-privilege GitHub App and register repositories by installation and project. Encrypt persisted credentials and keep short-lived integration tokens out of model context.
+- [ ] Let authorized users submit tasks and receive an ID. Persist the request source, repository, base commit, and idempotency key. Produce a plan, verification criteria, and risks. Use `NEEDS_CLARIFICATION` for incomplete requests.
+- [ ] Evaluate repository policy on the plan and before writes. Record allow or approval reasons. Stop before a sensitive operation and notify the approver via Discord. Bind decisions to the approver, time, scope, and plan revision.
 
-### 2B · Sửa code và kiểm chứng trong sandbox
+### 2B · Apply and verify changes in the sandbox
 
-- [ ] Tạo workspace riêng cho mỗi lần chạy. Container chạy non-root, giới hạn CPU/RAM/thời gian, hạn chế mạng, không gắn thư mục host hoặc Docker socket và không nhận secret production. Kiểm thử việc chặn đọc ngoài workspace, chặn kết nối ngoài chính sách và thu hồi container khi thành công, lỗi, timeout hoặc hủy task.
-- [ ] Cấp các công cụ đọc/tìm/tạo/sửa file, xem diff và chạy build/test theo cấu hình repo. Mỗi công cụ kiểm tra đầu vào, quyền, đường dẫn và giới hạn, trả kết quả có cấu trúc và ghi audit. Việc xóa file cần quyền riêng và phê duyệt theo chính sách. Lệnh thực thi chỉ chạy trong sandbox.
-- [ ] Coding thực hiện kế hoạch trên nhánh task. Testing lưu lệnh, mã thoát và kết quả build/test. Reviewer đọc diff cùng kết quả test, ghi phát hiện và mức độ. Build/test lỗi hoặc còn phát hiện chặn thì dừng trước bước xuất bản. Mỗi vòng sửa tiêu hao hạn mức thử lại và ngân sách.
-- [ ] Ghi token, chi phí ước tính, thời lượng và công cụ đã dùng theo execution. Kiểm tra ngân sách trước lần gọi tiếp theo, giới hạn đầu ra của model và ghi lý do khi chạm trần. Hủy task phải dừng được công việc đang chạy và ngăn các bước tiếp theo.
+- [ ] Use a workspace per run and an unprivileged container with CPU, memory, time, and network limits. Keep host mounts, the Docker socket, and production credentials out of the sandbox. Verify containment and cleanup on success, failure, timeout, and cancellation.
+- [ ] Expose file read, search, create, edit, diff, build, and test tools within the sandbox. Validate inputs, permissions, paths, and limits. Return structured results and audit tool use. Require distinct permission and any applicable approval for deletion.
+- [ ] Apply the plan on a task branch. Capture build and test commands, exit codes, and results. Review the diff and evidence, with findings assigned a severity. Block publication on failing verification or blocking findings. Charge each fix loop against the retry limit and budget.
+- [ ] Record tokens, estimated cost, duration, and tools per execution. Check the remaining budget before each model call and limit its output. Record why a limit was reached. Cancel active work and prevent subsequent steps when a task is canceled.
 
-### 2C · Từ bản thay đổi đã kiểm tra đến một PR
+### 2C · Publish the verified change
 
-- [ ] Đánh giá lại chính sách trên diff thực tế trước khi push. Với thay đổi cần duyệt, hiển thị diff, base commit, kết quả build/test, phát hiện review và chi phí. Gắn quyết định duyệt với đúng commit. Nếu bản sửa thay đổi, kiểm tra lại và xin duyệt lại theo chính sách.
-- [ ] Khi build/test đạt, review hết lỗi chặn và chính sách cho phép, thành phần GitHub đẩy đúng commit đã kiểm tra lên nhánh task và mở PR có liên kết về task, tóm tắt thay đổi và bằng chứng test. Chỉ chuyển task sang `COMPLETED` khi đã lưu được liên kết PR. Người có thẩm quyền thực hiện merge trên GitHub.
-- [ ] Khi GitHub đã tạo PR nhưng Worker mất kết nối trước khi lưu kết quả, lần chạy lại tìm PR theo repo/nhánh task và liên kết lại. Áp dụng cùng nguyên tắc chống trùng cho webhook và thông báo.
+- [ ] Re-evaluate policy on the actual diff before publishing. Show the diff, base commit, verification results, review findings, and cost when approval is required. Bind approval to the reviewed commit and repeat checks and approvals after changes.
+- [ ] Publish the verified commit once build, tests, review, and policy pass. Open a PR with the task link, summary, and evidence. Set `COMPLETED` after persisting the PR link. An authorized person merges on GitHub.
+- [ ] If a Worker stops after GitHub creates a PR, find it by repository and task branch on retry and restore its link. Apply the same idempotency principle to webhook ingestion and notifications.
 
-### 2D · Hoàn thiện ba kênh và dashboard vận hành
+### 2D · Complete the entry points and dashboard
 
-- [ ] Discord nhận lệnh giao việc, trả task ID, hỗ trợ xem trạng thái và hủy. Gửi thông báo cần duyệt kèm liên kết đến màn hình duyệt, báo lỗi hoặc gửi link PR khi hoàn tất.
-- [ ] GitHub nhận Issue theo điều kiện kích hoạt đã chốt trong Phase 0. Xác minh chữ ký webhook, kiểm tra installation/repo và quyền người kích hoạt, loại sự kiện lặp. Đồng bộ trạng thái PR và CI về task.
-- [ ] Dashboard tạo task qua cùng API, hiển thị task đang chạy, hoàn tất, thất bại và chờ duyệt. Trang chi tiết có kế hoạch, timeline, tool call, lỗi, chi phí và PR. SignalR cập nhật trực tiếp, client đọc bù từ lịch sử đã lưu sau khi mất kết nối.
-- [ ] Giao diện có trạng thái tải, trống, thành công và lỗi. Người dùng thao tác bàn phím được với tạo task và phê duyệt. Có test component/form và E2E cho luồng từ tạo task đến xem PR.
+- [ ] Accept Discord task commands and provide task IDs, status, and cancellation. Notify users about approvals with a dashboard link, failures, and completed PRs.
+- [ ] Accept eligible GitHub Issues. Verify webhooks and installation, repository, and actor permissions. Deduplicate events and reflect PR and CI state in the task.
+- [ ] Create dashboard tasks through the same API. Show active, completed, failed, and approval states, with plans, timelines, tools, errors, costs, and PRs. Refresh via SignalR and restore persisted history on reconnect.
+- [ ] Cover loading, empty, success, and error states, plus keyboard access for task creation and approvals. Add component tests and an end-to-end test from task creation to the PR.
 
-## Kịch bản nghiệm thu trước khi bàn giao MVP
+## MVP acceptance scenarios
 
-| Đạt | Kịch bản cần chạy | Bằng chứng để chấp nhận |
+| Done | Scenario | Evidence |
 | --- | --- | --- |
-| ☐ | Giao qua Discord một lỗi trong phạm vi tự động, có test tái hiện trên repo pilot, chạy qua GitHub App và nhà cung cấp AI thật | Test hồi quy thất bại trên bản gốc và thành công trên bản sửa. Bot tự gửi đúng một link PR về Discord. Task có kết quả build/test, review, chi phí và lý do được phép mở PR tự động. |
-| ☐ | Tạo các task độc lập từ Discord, GitHub Issue và dashboard | Mỗi kênh trả hoặc hiển thị task ID, truy được nguồn, theo dõi được tiến trình và dẫn tới đúng kết quả. |
-| ☐ | Cho một task đang tự động cần sửa vùng nhạy cảm. Thử từ chối kế hoạch, từ chối diff hoặc đổi bản sửa sau khi duyệt | Worker dừng trước thao tác nhạy cảm. Khi bị từ chối hoặc thiếu phê duyệt cho đúng bản sửa, task ghi lý do và không xuất bản. |
-| ☐ | Cho build/test thất bại hoặc Reviewer ghi nhận lỗi chặn | Có bằng chứng lỗi và lịch sử xử lý. PR chỉ được mở sau khi điều kiện kiểm tra và duyệt đều đạt. |
-| ☐ | Gửi webhook lặp, chạy hai Worker, ngắt Worker ngay sau khi GitHub tạo PR | Sau phục hồi chỉ có một task cho cùng yêu cầu, một PR cho task và lịch sử nhất quán. |
-| ☐ | Người ngoài repo truy cập, agent tự duyệt hoặc nội dung README yêu cầu dùng quyền ngoài chính sách | Quyền hiệu lực vẫn do hệ thống kiểm tra. Tác vụ trái quyền bị từ chối, audit ghi lý do và log không chứa token. |
-| ☐ | Hủy giữa chừng, để task hết giờ hoặc chạm trần ngân sách | Task dừng với lý do rõ ràng, sandbox được thu hồi và không phát sinh bước xuất bản mới. |
-| ☐ | Mất kết nối dashboard rồi mở lại | Timeline khôi phục đủ sự kiện theo thứ tự. Từ task ID tra được execution, tool call, kết quả áp dụng chính sách, quyết định duyệt nếu có, chi phí và PR. |
+| ☐ | Submit an in-scope reproducible bug through Discord with a real GitHub App and model provider. | The regression test fails before the fix and passes after it. Discord receives one PR link. The task records verification, review, cost, and policy reasons. |
+| ☐ | Submit independent requests through Discord, GitHub Issue, and the dashboard. | Every entry point provides a task ID, traceable source, progress, and correct outcome. |
+| ☐ | Propose a sensitive change. Reject a plan or diff, or change the commit after approval. | The Worker stops before sensitive work and withholds publishing without approval for the current change. The task records the reason. |
+| ☐ | Fail verification or record a blocking review finding. | The task retains the failure evidence and history. A PR requires passing checks and approval. |
+| ☐ | Deliver a duplicate webhook, run two Workers, and stop a Worker just after PR creation. | Recovery leaves one task per request, one PR per task, and consistent history. |
+| ☐ | Attempt an action without project permission or valid human approval. Include untrusted repository instructions in the case. | Backend policy denies unauthorized actions, records the denial, and keeps tokens out of logs. |
+| ☐ | Cancel a running task, exceed its timeout, or hit its budget. | The run stops with a reason, the sandbox is removed, and publication is prevented. |
+| ☐ | Disconnect and reconnect the dashboard. | The ordered timeline is restored. The task links to execution, tools, decisions, approvals, cost, and the PR. |
 
-**Điều kiện phát hành pilot** — Các kịch bản trên có bằng chứng, CI xanh bằng dữ liệu giả lập xác định, và chủ dự án chấp nhận PR mẫu sau khi kiểm tra diff. Với mỗi hạng mục triển khai, ghi mục tiêu, hiện trạng, thay đổi, file ảnh hưởng, test đã chạy, kết quả và phần còn tồn đọng.
+Release the pilot when these scenarios have evidence, deterministic CI passes, and the project owner accepts the sample PR after reviewing its diff. For each work item, record the goal, changes, affected files, tests and results, and pending work.
 
-**Backlog sau MVP** — Điều phối nhiều agent độc lập, giao việc agent-to-agent, quản lý phòng ban/team, Workflow Designer, Knowledge Base, ngân sách phân cấp, triển khai production và vận hành đa tổ chức.
+Post-MVP work includes multi-agent coordination, agent-to-agent handoffs, teams, Workflow Designer, a knowledge base, hierarchical budgets, production deployment, and organization-level isolation.

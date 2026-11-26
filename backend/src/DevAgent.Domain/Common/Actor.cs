@@ -1,13 +1,6 @@
 namespace DevAgent.Domain.Common;
 
-public enum ActorKind
-{
-    User = 1,
-    Agent = 2,
-    System = 3,
-}
-
-/// <summary>Ai đã thực hiện hành động: người dùng, agent hay hệ thống. Dùng cho lịch sử trạng thái và audit.</summary>
+/// <summary>Who performed an action: a user, an agent or the system. Recorded in status history and audit entries.</summary>
 public sealed record Actor
 {
     private Actor(ActorKind kind, string id)

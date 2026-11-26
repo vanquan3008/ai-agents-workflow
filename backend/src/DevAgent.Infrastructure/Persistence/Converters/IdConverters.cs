@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace DevAgent.Infrastructure.Persistence.Converters;
 
-// Ánh xạ ID kiểu mạnh <-> uuid. Đăng ký một lần trong ConfigureConventions.
+// Strongly typed id <-> uuid mappings, registered once in ConfigureConventions.
 internal sealed class UserIdConverter() : ValueConverter<UserId, Guid>(v => v.Value, v => new UserId(v));
 
 internal sealed class ProjectIdConverter() : ValueConverter<ProjectId, Guid>(v => v.Value, v => new ProjectId(v));

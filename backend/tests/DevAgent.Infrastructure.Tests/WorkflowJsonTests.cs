@@ -9,7 +9,7 @@ public sealed class WorkflowJsonTests
     [Fact]
     public void Empty_json_reads_as_system_default()
     {
-        // Migration đặt "{}" cho các repo đã có; phải tương đương quy trình mặc định.
+        // The migration stored "{}" for existing repositories; it must equal the default workflow.
         WorkflowJson.Deserialize("{}").ShouldBe(WorkflowDefinition.Default);
     }
 

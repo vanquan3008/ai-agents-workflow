@@ -7,9 +7,9 @@ type Listener = (event: TaskRealtimeEvent) => void
 type ReconnectListener = () => void
 
 /**
- * Một kết nối SignalR dùng chung cho toàn dashboard.
- * Sau khi kết nối lại, các đăng ký được gửi lại và listener "reconnected" được gọi để
- * màn hình đọc bù timeline từ API (nguồn sự thật là DB, sự kiện realtime chỉ là gợi ý cập nhật).
+ * One SignalR connection shared by the whole dashboard.
+ * After a reconnect, subscriptions are replayed and "reconnected" listeners fire so screens re-read the timeline
+ * from the API: the database is the source of truth and realtime events are only refresh hints.
  */
 class TaskHubClient {
   private connection: HubConnection | null = null
@@ -21,7 +21,7 @@ class TaskHubClient {
   private build(): HubConnection {
     const connection = new HubConnectionBuilder()
       .withUrl(env.hubUrl, {
-        // Lấy token mới nhất mỗi lần (kết nối lại sau khi token được refresh).
+        // Read the latest token on every (re)connect, after refreshes.
         accessTokenFactory: async () => {
           if (!session.accessToken) await session.refresh()
           return session.accessToken ?? ''
@@ -79,7 +79,7 @@ class TaskHubClient {
     return () => this.reconnectListeners.delete(listener)
   }
 
-  /** Đăng ký nhận sự kiện của một task. Trả false nếu server từ chối (không có quyền). */
+  /** Subscribes to one task's events; resolves false when the server refuses (no permission). */
   async subscribeTask(taskId: string): Promise<boolean> {
     const connection = await this.ensureStarted()
     this.taskSubscriptions.set(taskId, (this.taskSubscriptions.get(taskId) ?? 0) + 1)

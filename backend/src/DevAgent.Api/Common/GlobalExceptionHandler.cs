@@ -7,8 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace DevAgent.Api.Common;
 
 /// <summary>
-/// Chuyển ngoại lệ còn sót thành ProblemDetails. Vi phạm bất biến domain → 422, xung đột đồng thời → 409.
-/// Lỗi không lường trước → 500, không lộ stack trace ra ngoài; traceId giúp tra log.
+/// Converts unhandled exceptions to ProblemDetails: domain invariant violations → 422, concurrency conflicts → 409,
+/// anything else → 500 without leaking stack traces; the traceId links the response to logs.
 /// </summary>
 internal sealed partial class GlobalExceptionHandler(IProblemDetailsService problemDetails, ILogger<GlobalExceptionHandler> logger)
     : IExceptionHandler
@@ -48,6 +48,6 @@ internal sealed partial class GlobalExceptionHandler(IProblemDetailsService prob
         });
     }
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Lỗi không xử lý được trong request")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unhandled exception while processing the request")]
     private static partial void LogUnhandled(ILogger logger, Exception exception);
 }

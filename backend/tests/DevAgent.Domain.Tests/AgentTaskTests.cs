@@ -109,7 +109,7 @@ public sealed class AgentTaskTests
         task.WaitForApproval("cần duyệt", Actor.System, Now.AddMinutes(11));
         task.StartCoding(Actor.System, "đã duyệt", Now.AddHours(5));
 
-        // Pending 1' + Planning 10' + InProgress 2' = 13'; 5 giờ chờ duyệt không tính.
+        // Pending 1' + Planning 10' + InProgress 2' = 13'; the 5 hours waiting for approval do not count.
         task.ActiveDuration(Now.AddHours(5).AddMinutes(2)).ShouldBe(TimeSpan.FromMinutes(13));
     }
 

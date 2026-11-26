@@ -3,16 +3,19 @@ using DevAgent.Application.Abstractions.Security;
 using DevAgent.Application.Common;
 using DevAgent.Application.Features.Projects;
 using DevAgent.Domain.Auditing;
+using DevAgent.Domain.Auditing.Repositories;
 using DevAgent.Domain.Common;
 using DevAgent.Domain.Projects;
+using DevAgent.Domain.Projects.Repositories;
 using DevAgent.Domain.Users;
+using DevAgent.Domain.Users.Repositories;
 
 namespace DevAgent.Application.Authorization;
 
 /// <summary>
-/// Kiểm tra quyền theo project và hành động (checklist 1.3). Mọi use case đọc/ghi đều đi qua đây,
-/// kể cả đăng ký nhận sự kiện SignalR. Super Admin có toàn quyền trên mọi project.
-/// Quyền luôn đọc từ DB (không tin claim trong token) để thu hồi quyền có hiệu lực ngay. Lần bị từ chối được ghi audit.
+/// Project- and action-level authorization. Every read and write use case goes through here, including SignalR
+/// subscriptions. Super admins may do everything. Permissions are always read from the database rather than token
+/// claims so revocations apply immediately, and every denial is audited.
 /// </summary>
 public sealed class ProjectAccess(
     ICurrentUser currentUser,
@@ -66,7 +69,6 @@ public sealed class ProjectAccess(
         return user is null ? Error.Unauthorized() : user.Id;
     }
 
-    /// <summary>Chỉ Super Admin (quản trị nền tảng).</summary>
     public async Task<Result<User>> RequireSuperAdminAsync(string action, CancellationToken cancellationToken)
     {
         var user = await CurrentActiveUserAsync(cancellationToken);
@@ -84,7 +86,7 @@ public sealed class ProjectAccess(
         return Error.Forbidden("Thao tác chỉ dành cho Super Admin.");
     }
 
-    /// <summary>Các project người dùng hiện tại có quyền <paramref name="permission"/>; Super Admin: mọi project.</summary>
+    /// <summary>Projects where the current user holds <paramref name="permission"/>; every project for super admins.</summary>
     public async Task<Result<IReadOnlyCollection<ProjectId>>> ProjectsWithPermissionAsync(ProjectPermission permission, CancellationToken cancellationToken)
     {
         var user = await CurrentActiveUserAsync(cancellationToken);
@@ -99,7 +101,25 @@ public sealed class ProjectAccess(
         return Result<IReadOnlyCollection<ProjectId>>.Success(ids);
     }
 
-    /// <summary>Người dùng hiện tại nếu đã đăng nhập và tài khoản còn hoạt động.</summary>
+    /// <summary>
+    /// Scope for list queries: the requested project when given (after a permission check),
+    /// otherwise every project the user may view.
+    /// </summary>
+    public async Task<Result<IReadOnlyCollection<ProjectId>>> ResolveViewableProjectsAsync(Guid? requestedProjectId, CancellationToken cancellationToken)
+    {
+        if (requestedProjectId is not { } projectGuid)
+        {
+            return await ProjectsWithPermissionAsync(ProjectPermission.ViewTasks, cancellationToken);
+        }
+
+        var projectId = new ProjectId(projectGuid);
+        var user = await RequireAsync(projectId, ProjectPermission.ViewTasks, "project", projectId.ToString(), cancellationToken);
+        return user.IsFailure
+            ? Result<IReadOnlyCollection<ProjectId>>.Failure(user.Error!)
+            : Result<IReadOnlyCollection<ProjectId>>.Success([projectId]);
+    }
+
+    /// <summary>The signed-in user when the account is still active.</summary>
     public async Task<User?> CurrentActiveUserAsync(CancellationToken cancellationToken)
     {
         if (currentUser.UserId is not { } userId)
@@ -107,7 +127,7 @@ public sealed class ProjectAccess(
             return null;
         }
 
-        // Cache trong scope, nhưng chỉ cho đúng người dùng hiện tại (hub có thể gán principal khác trong cùng scope).
+        // Cached per scope, but only for the same user: a hub can switch principals within one scope.
         if (_cachedUser?.Id != userId)
         {
             _cachedUser = await users.GetByIdAsync(userId, cancellationToken);

@@ -5,8 +5,8 @@ using Shouldly;
 namespace DevAgent.ArchitectureTests;
 
 /// <summary>
-/// Giữ đúng hướng phụ thuộc DDD/Clean Architecture: Domain ← Application ← Infrastructure ← Api/Worker.
-/// Vi phạm làm CI đỏ, nên ranh giới không bị xói mòn dần theo thời gian.
+/// Enforces the DDD/Clean Architecture dependency direction: Domain ← Application ← Infrastructure ← Api/Worker.
+/// Violations fail CI so the boundaries cannot erode over time.
 /// </summary>
 public sealed class LayerDependencyTests
 {
@@ -80,6 +80,45 @@ public sealed class LayerDependencyTests
     }
 
     [Fact]
+    public void Feature_modules_and_the_api_do_not_depend_on_the_agent_runtime()
+    {
+        var features = Types.InAssembly(Application)
+            .That()
+            .ResideInNamespace("DevAgent.Application.Features")
+            .ShouldNot()
+            .HaveDependencyOn("DevAgent.Application.AgentRuntime")
+            .GetResult();
+        features.IsSuccessful.ShouldBeTrue(Describe(features));
+
+        var api = Types.InAssembly(Assembly.Load("DevAgent.Api"))
+            .ShouldNot()
+            .HaveDependencyOn("DevAgent.Application.AgentRuntime")
+            .GetResult();
+        api.IsSuccessful.ShouldBeTrue(Describe(api));
+    }
+
+    [Fact]
+    public void Repository_contracts_live_next_to_their_aggregate_in_the_domain()
+    {
+        var misplaced = Application.GetTypes()
+            .Concat(Infrastructure.GetTypes())
+            .Where(t => t.IsInterface && t.Name.EndsWith("Repository", StringComparison.Ordinal))
+            .Select(t => t.FullName)
+            .ToArray();
+
+        misplaced.ShouldBeEmpty("Repository interfaces belong to their aggregate namespace in DevAgent.Domain.");
+
+        var domainContracts = Domain.GetTypes()
+            .Where(t => t.IsInterface && t.Name.EndsWith("Repository", StringComparison.Ordinal))
+            .ToArray();
+        domainContracts.ShouldNotBeEmpty();
+        domainContracts
+            .Where(t => t.Namespace?.EndsWith(".Repositories", StringComparison.Ordinal) != true)
+            .Select(t => t.FullName)
+            .ShouldBeEmpty("Each module keeps its repository contracts in a Repositories folder (DevAgent.Domain.<Module>.Repositories).");
+    }
+
+    [Fact]
     public void Aggregate_roots_have_no_public_setters()
     {
         var offenders = Domain.GetTypes()
@@ -89,9 +128,9 @@ public sealed class LayerDependencyTests
                 .Select(p => $"{t.Name}.{p.Name}"))
             .ToArray();
 
-        offenders.ShouldBeEmpty("Trạng thái domain chỉ được thay đổi qua phương thức nghiệp vụ.");
+        offenders.ShouldBeEmpty("Domain state may only change through business methods.");
     }
 
     private static string Describe(NetArchTest.Rules.TestResult result) =>
-        result.IsSuccessful ? string.Empty : "Vi phạm: " + string.Join(", ", result.FailingTypeNames ?? []);
+        result.IsSuccessful ? string.Empty : "Violations: " + string.Join(", ", result.FailingTypeNames ?? []);
 }

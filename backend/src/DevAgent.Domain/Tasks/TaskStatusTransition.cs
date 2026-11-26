@@ -3,8 +3,7 @@ using DevAgent.Domain.Common;
 namespace DevAgent.Domain.Tasks;
 
 /// <summary>
-/// Bản ghi một lần chuyển trạng thái: ai, khi nào, vì sao. Đây là xương sống của timeline
-/// mà dashboard đọc bù sau khi mất kết nối SignalR.
+/// One status change: who, when and why. This is the timeline the dashboard replays after a SignalR reconnect.
 /// </summary>
 public sealed class TaskStatusTransition
 {
@@ -30,7 +29,7 @@ public sealed class TaskStatusTransition
         OccurredAt = occurredAt;
     }
 
-    /// <summary>Số thứ tự tăng dần trong task, dùng để client đọc bù đúng thứ tự.</summary>
+    /// <summary>Monotonic per task, so clients can replay missed entries in order.</summary>
     public long Sequence { get; private set; }
 
     public AgentTaskStatus? From { get; private set; }

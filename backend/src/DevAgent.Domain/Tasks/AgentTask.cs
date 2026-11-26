@@ -5,9 +5,8 @@ using DevAgent.Domain.Workflows;
 namespace DevAgent.Domain.Tasks;
 
 /// <summary>
-/// Task: một yêu cầu sửa lỗi trên một repo. Aggregate root sở hữu vòng đời, các phiên bản kế hoạch,
-/// lịch sử trạng thái và liên kết PR. Lần thực thi (AgentExecution) và phê duyệt (Approval) là
-/// aggregate riêng, tham chiếu tới task bằng <see cref="TaskId"/>.
+/// A bug-fix request against one repository. Owns the lifecycle, plan versions, status history and PR link.
+/// Executions and approvals are separate aggregates that reference the task by <see cref="TaskId"/>.
 /// </summary>
 public sealed class AgentTask : AggregateRoot<TaskId>
 {
@@ -63,17 +62,17 @@ public sealed class AgentTask : AggregateRoot<TaskId>
 
     public UserId RequestedBy { get; private set; }
 
-    /// <summary>Commit gốc lúc bắt đầu xử lý; mọi diff và phê duyệt được tính trên commit này.</summary>
+    /// <summary>Commit captured when processing started; every diff and approval is computed against it.</summary>
     public string? BaseCommitSha { get; private set; }
 
-    /// <summary>Nhánh làm việc riêng của task, ví dụ <c>devagent/task-0193...</c>.</summary>
+    /// <summary>Dedicated working branch, e.g. <c>devagent/task-0193...</c>.</summary>
     public string? WorkBranch { get; private set; }
 
     public AgentTaskStatus Status { get; private set; }
 
     /// <summary>
-    /// Ảnh chụp quy trình tại lúc bắt đầu lượt xử lý: đổi quy trình của repo giữa chừng không ảnh hưởng task đang chạy.
-    /// Null khi task chưa bắt đầu.
+    /// Workflow snapshot taken when processing started, so later repository workflow edits never affect a running task.
+    /// Null until the task starts.
     /// </summary>
     public WorkflowDefinition? Workflow { get; private set; }
 
@@ -102,8 +101,8 @@ public sealed class AgentTask : AggregateRoot<TaskId>
     public bool IsTerminal => AgentTaskStateMachine.IsTerminal(Status);
 
     /// <summary>
-    /// Tổng thời gian task ở các trạng thái Worker chủ động xử lý; không tính thời gian chờ duyệt,
-    /// chờ bổ sung thông tin hay bị chặn. Dùng cho kiểm tra timeout.
+    /// Time spent in statuses the worker actively processes, excluding waits for approval, clarification
+    /// or unblocking. Used for timeout enforcement.
     /// </summary>
     public TimeSpan ActiveDuration(DateTimeOffset now)
     {
@@ -170,7 +169,7 @@ public sealed class AgentTask : AggregateRoot<TaskId>
         TransitionTo(AgentTaskStatus.Planning, actor, $"Bắt đầu lập kế hoạch (quy trình v{workflowVersion}).", now);
     }
 
-    /// <summary>Thời điểm task vào Planning gần nhất: mốc bắt đầu của lượt lập kế hoạch hiện tại.</summary>
+    /// <summary>When the task last entered Planning, i.e. the start of the current planning round.</summary>
     public DateTimeOffset? CurrentPlanningStartedAt =>
         _transitions.Where(t => t.To == AgentTaskStatus.Planning).MaxBy(t => t.Sequence)?.OccurredAt;
 
@@ -231,7 +230,7 @@ public sealed class AgentTask : AggregateRoot<TaskId>
     public void ReturnToPlanning(Actor actor, string reason, DateTimeOffset now) =>
         TransitionTo(AgentTaskStatus.Planning, actor, reason, now);
 
-    /// <summary>Hoàn tất chỉ khi đã có liên kết PR (checklist 2C).</summary>
+    /// <summary>Completion requires a stored pull request link.</summary>
     public void Complete(PullRequestLink pullRequest, Actor actor, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(pullRequest);
@@ -241,7 +240,7 @@ public sealed class AgentTask : AggregateRoot<TaskId>
         TransitionTo(AgentTaskStatus.Completed, actor, $"Đã mở PR #{pullRequest.Number}.", now);
     }
 
-    /// <summary>Ghi nhận PR đã tồn tại (phục hồi sau khi Worker mất kết nối) mà không đổi trạng thái.</summary>
+    /// <summary>Re-links an existing PR (recovery after a worker crash) without changing the status.</summary>
     public void LinkPullRequest(PullRequestLink pullRequest)
     {
         ArgumentNullException.ThrowIfNull(pullRequest);
@@ -269,7 +268,7 @@ public sealed class AgentTask : AggregateRoot<TaskId>
     {
         if (Status == AgentTaskStatus.Cancelled)
         {
-            return; // Hủy là idempotent.
+            return;
         }
 
         TransitionTo(AgentTaskStatus.Cancelled, Actor.ForUser(by), reason ?? "Người dùng hủy task.", now);

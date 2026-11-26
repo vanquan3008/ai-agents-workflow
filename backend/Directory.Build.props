@@ -1,5 +1,5 @@
 <Project>
-  <!-- Thiết lập chung cho mọi project backend. -->
+  <!-- Settings shared by every backend project. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -12,7 +12,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <Deterministic>true</Deterministic>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <!-- CA1707: tên test dùng dấu gạch dưới; CA1711: tên domain như ProjectPermission; CA1716: từ khóa VB.NET; CA1848/CA1873: chấp nhận ILogger extension ở giai đoạn pilot. -->
+    <!-- CA1707: test names use underscores; CA1711: domain names such as ProjectPermission; CA1716: VB.NET keywords; CA1848/CA1873: ILogger extension methods are accepted for now. -->
     <NoWarn>$(NoWarn);CA1707;CA1711;CA1716;CA1848;CA1873</NoWarn>
   </PropertyGroup>
 

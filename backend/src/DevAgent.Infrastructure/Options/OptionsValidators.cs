@@ -4,8 +4,8 @@ using Microsoft.Extensions.Options;
 namespace DevAgent.Infrastructure.Options;
 
 /// <summary>
-/// Ràng buộc chéo giữa các trường và theo môi trường. Chạy lúc khởi động (ValidateOnStart):
-/// cấu hình sai làm tiến trình dừng ngay thay vì hỏng giữa chừng khi xử lý task.
+/// Cross-field and environment-specific rules, run at startup (ValidateOnStart) so a misconfiguration stops the
+/// process immediately instead of failing mid-task.
 /// </summary>
 internal sealed class AiOptionsValidator(IHostEnvironment environment) : IValidateOptions<AiOptions>
 {

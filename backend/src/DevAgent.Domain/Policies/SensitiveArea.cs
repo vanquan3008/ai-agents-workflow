@@ -1,6 +1,6 @@
 namespace DevAgent.Domain.Policies;
 
-/// <summary>Các vùng nhạy cảm theo chính sách pilot. Đụng tới bất kỳ vùng nào đều phải có người duyệt.</summary>
+/// <summary>Sensitive areas. Touching any of them requires human approval.</summary>
 [Flags]
 public enum SensitiveArea
 {

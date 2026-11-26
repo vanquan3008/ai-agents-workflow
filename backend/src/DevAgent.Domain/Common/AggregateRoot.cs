@@ -1,8 +1,8 @@
 namespace DevAgent.Domain.Common;
 
 /// <summary>
-/// Gốc aggregate: ranh giới nhất quán và đơn vị lưu trữ. Ghi nhận domain event để
-/// tầng hạ tầng phát đi sau khi giao dịch commit thành công.
+/// Consistency boundary and unit of persistence. Collects domain events that infrastructure
+/// dispatches once the surrounding transaction has committed.
 /// </summary>
 public abstract class AggregateRoot<TId> : Entity<TId>, IHasDomainEvents
     where TId : struct, IEquatable<TId>

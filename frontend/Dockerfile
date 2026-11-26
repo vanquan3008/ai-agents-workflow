@@ -6,7 +6,7 @@ RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
 RUN npm run build
 
-# Một image cho mọi môi trường: cấu hình runtime sinh từ biến DEVAGENT_* lúc khởi động (/config.js).
+# One image for every environment: runtime configuration is rendered from DEVAGENT_* variables at startup (/config.js).
 FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --chmod=755 docker/40-devagent-config.sh /docker-entrypoint.d/40-devagent-config.sh

@@ -1,70 +1,63 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
-import { useApprovals } from './api'
+import { ShieldCheck } from 'lucide-react'
 import type { ApprovalStatus } from '@/shared/api/types'
-import { formatDateTime, statusLabel } from '@/shared/lib/format'
-import { ErrorBlock, EmptyBlock, LoadingBlock, PageHeader } from '@/shared/ui/page'
+import { statusLabel } from '@/shared/lib/labels'
+import { OptionSelect } from '@/shared/ui/option-select'
+import { PageHeader } from '@/shared/ui/page-header'
 import { Pagination } from '@/shared/ui/pagination'
-import { StatusBadge } from '@/shared/ui/status-badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Panel } from '@/shared/ui/panel'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/shared/ui/states'
+import { useApprovals } from './api'
+import { ApprovalTable } from './components/ApprovalTable'
+
+const ALL = 'all'
+const APPROVAL_STATUSES: readonly ApprovalStatus[] = ['PENDING', 'APPROVED', 'REJECTED', 'EXPIRED', 'SUPERSEDED']
 
 export default function ApprovalsPage() {
   const [status, setStatus] = useState<ApprovalStatus | ''>('PENDING')
   const [page, setPage] = useState(1)
   const query = useApprovals(status, page)
+
   return (
-    <section className="space-y-4">
-      <PageHeader title="Phê duyệt" />
-      <label className="flex items-center gap-3 text-sm">
-        Trạng thái
-        <select
-          className="h-9 rounded-md border bg-background px-3"
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value as ApprovalStatus | '')
-            setPage(1)
-          }}
-        >
-          <option value="">Tất cả</option>
-          {(['PENDING', 'APPROVED', 'REJECTED', 'EXPIRED', 'SUPERSEDED'] as const).map((value) => (
-            <option value={value} key={value}>
-              {statusLabel(value)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {query.isPending && <LoadingBlock />}
-      {query.isError && <ErrorBlock error={query.error} onRetry={() => void query.refetch()} />}
-      {query.data?.items.length === 0 && <EmptyBlock title="Không có yêu cầu duyệt" />}
-      {query.data && query.data.items.length > 0 && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Task</TableHead>
-              <TableHead>Nội dung</TableHead>
-              <TableHead>Trạng thái</TableHead>
-              <TableHead>Hết hạn</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {query.data.items.map((approval) => (
-              <TableRow key={approval.id}>
-                <TableCell>
-                  <Link className="font-medium hover:underline" to={`/approvals/${approval.id}`}>
-                    {approval.taskTitle}
-                  </Link>
-                </TableCell>
-                <TableCell>{approval.kind === 'PLAN' ? `Kế hoạch v${approval.planVersion}` : 'Diff'}</TableCell>
-                <TableCell>
-                  <StatusBadge status={approval.status} />
-                </TableCell>
-                <TableCell>{formatDateTime(approval.expiresAt)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+    <div className="space-y-4">
+      <PageHeader
+        title="Phê duyệt"
+        description="Thay đổi chạm vùng nhạy cảm hoặc nằm ngoài phạm vi tự động cần người có quyền quyết định."
+        className="pb-2"
+      />
+
+      <OptionSelect
+        aria-label="Lọc theo trạng thái"
+        className="sm:w-56"
+        value={status || ALL}
+        onValueChange={(value) => {
+          setStatus(value === ALL ? '' : (value as ApprovalStatus))
+          setPage(1)
+        }}
+        options={[{ value: ALL, label: 'Mọi trạng thái' }, ...APPROVAL_STATUSES.map((value) => ({ value, label: statusLabel(value) }))]}
+      />
+
+      <Panel flush>
+        {query.isPending && <LoadingBlock rows={5} className="p-4" />}
+        {query.isError && <ErrorBlock error={query.error} onRetry={() => void query.refetch()} className="m-4 w-auto" />}
+        {query.data?.items.length === 0 && (
+          <EmptyBlock
+            className="m-4 w-auto"
+            icon={<ShieldCheck />}
+            title={status === 'PENDING' ? 'Không có gì chờ duyệt' : 'Không có yêu cầu duyệt'}
+            description={status === 'PENDING' ? 'Khi agent cần quyết định của bạn, yêu cầu sẽ xuất hiện ở đây.' : undefined}
+          />
+        )}
+        {query.data && query.data.items.length > 0 && (
+          <div className="overflow-x-auto">
+            <ApprovalTable approvals={query.data.items} />
+          </div>
+        )}
+      </Panel>
+
+      {query.data && query.data.totalPages > 1 && (
+        <Pagination page={page} totalPages={query.data.totalPages} totalCount={query.data.totalCount} pending={query.isFetching} onPage={setPage} />
       )}
-      {query.data && <Pagination page={page} totalPages={query.data.totalPages} pending={query.isFetching} onPage={setPage} />}
-    </section>
+    </div>
   )
 }

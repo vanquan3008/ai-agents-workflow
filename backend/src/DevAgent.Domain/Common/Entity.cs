@@ -1,12 +1,12 @@
 namespace DevAgent.Domain.Common;
 
-/// <summary>Thực thể có định danh. Hai thực thể bằng nhau khi cùng kiểu và cùng Id.</summary>
+/// <summary>An object with identity. Two entities are equal when they share the same runtime type and id.</summary>
 public abstract class Entity<TId>
     where TId : struct, IEquatable<TId>
 {
     protected Entity(TId id) => Id = id;
 
-    // Dành cho EF Core materialization.
+    // Required by EF Core materialization.
     protected Entity()
     {
     }

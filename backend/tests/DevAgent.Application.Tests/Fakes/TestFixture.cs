@@ -10,7 +10,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace DevAgent.Application.Tests.Fakes;
 
-/// <summary>Dữ liệu dựng sẵn: một project có Owner, Requester, và một người ngoài; một repo với chính sách mặc định.</summary>
+/// <summary>Prebuilt data: a project with an owner, a requester and an outsider, plus a repository with the default policy.</summary>
 internal sealed class TestFixture
 {
     public TestFixture()
@@ -56,7 +56,7 @@ internal sealed class TestFixture
     public void ActAsNobody() => CurrentUser.UserId = null;
 }
 
-/// <summary>Model giả trả văn bản cố định, đếm số lần gọi và lưu request cuối để kiểm tra trần đầu ra/model.</summary>
+/// <summary>Fake model returning fixed text; counts calls and keeps the last request to assert output caps and models.</summary>
 internal sealed class ScriptedModelClient(params string[] responses) : IModelClient
 {
     private int _index;
@@ -67,7 +67,7 @@ internal sealed class ScriptedModelClient(params string[] responses) : IModelCli
 
     public ModelStopReason StopReason { get; init; } = ModelStopReason.Completed;
 
-    /// <summary>Đơn giá trả về; null mô phỏng model chưa cấu hình giá.</summary>
+    /// <summary>Price to return; null simulates an unpriced model.</summary>
     public Func<string, ModelPrice?> Price { get; init; } = _ => ModelPrice.Free;
 
     public decimal CostPerCall { get; init; } = 0.01m;

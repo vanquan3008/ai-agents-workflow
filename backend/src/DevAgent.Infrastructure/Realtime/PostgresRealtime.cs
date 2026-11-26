@@ -18,8 +18,8 @@ internal static class RealtimeChannel
 }
 
 /// <summary>
-/// Phát sự kiện qua <c>pg_notify</c>. Worker và API dùng chung PostgreSQL nên không cần thêm broker.
-/// Khi cần fan-out nhiều instance API với tải lớn hoặc payload &gt; 8KB, chuyển sang Redis backplane (xem ADR trong README).
+/// Publishes through <c>pg_notify</c>; worker and API already share PostgreSQL, so no extra broker is needed.
+/// Move to a Redis backplane when fanning out to many API instances under load or with payloads over 8 KB.
 /// </summary>
 internal sealed partial class PostgresTaskEventPublisher(DevAgentDbContext context, ILogger<PostgresTaskEventPublisher> logger)
     : ITaskEventPublisher
@@ -33,22 +33,22 @@ internal sealed partial class PostgresTaskEventPublisher(DevAgentDbContext conte
         }
         catch (NpgsqlException ex)
         {
-            // Best-effort: dashboard đọc bù từ timeline đã lưu.
+            // Best effort: the dashboard replays the persisted timeline.
             LogPublishFailed(logger, ex, taskEvent.TaskId);
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Không phát được sự kiện realtime cho task {TaskId}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to publish realtime event for task {TaskId}")]
     private static partial void LogPublishFailed(ILogger logger, Exception exception, Guid taskId);
 }
 
-/// <summary>Đích nhận sự kiện realtime trong tiến trình API (hiện thực bằng SignalR).</summary>
+/// <summary>Realtime event sink inside the API process (implemented with SignalR).</summary>
 public interface ITaskEventSink
 {
     Task DeliverAsync(TaskRealtimeEvent taskEvent, CancellationToken cancellationToken);
 }
 
-/// <summary>LISTEN kênh PostgreSQL và chuyển sự kiện cho <see cref="ITaskEventSink"/>. Tự kết nối lại khi mất kết nối.</summary>
+/// <summary>LISTENs on the PostgreSQL channel and forwards events to <see cref="ITaskEventSink"/>, reconnecting with backoff.</summary>
 internal sealed partial class PostgresTaskEventListener(
     IConfiguration configuration,
     ITaskEventSink sink,
@@ -57,7 +57,7 @@ internal sealed partial class PostgresTaskEventListener(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var connectionString = configuration.GetConnectionString(DatabaseOptions.ConnectionStringName)
-            ?? throw new InvalidOperationException("Thiếu ConnectionStrings:Postgres.");
+            ?? throw new InvalidOperationException("ConnectionStrings:Postgres is missing.");
         var delay = TimeSpan.FromSeconds(1);
 
         while (!stoppingToken.IsCancellationRequested)
@@ -108,7 +108,7 @@ internal sealed partial class PostgresTaskEventListener(
 
         if (taskEvent is not null)
         {
-            // Không chặn vòng LISTEN; lỗi gửi được log trong continuation.
+            // Never block the LISTEN loop; delivery failures are logged in the continuation.
             _ = sink.DeliverAsync(taskEvent, cancellationToken).ContinueWith(
                 t => LogDeliverFailed(logger, t.Exception!, taskEvent.TaskId),
                 CancellationToken.None,
@@ -117,15 +117,15 @@ internal sealed partial class PostgresTaskEventListener(
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Đang LISTEN kênh realtime {Channel}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Listening on realtime channel {Channel}")]
     private static partial void LogListening(ILogger logger, string channel);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Mất kết nối LISTEN, thử lại sau {DelaySeconds}s")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LISTEN connection lost, retrying in {DelaySeconds}s")]
     private static partial void LogListenFailed(ILogger logger, Exception exception, double delaySeconds);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Payload realtime không hợp lệ")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Invalid realtime payload")]
     private static partial void LogBadPayload(ILogger logger, Exception exception);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Không gửi được sự kiện realtime của task {TaskId}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to deliver realtime event for task {TaskId}")]
     private static partial void LogDeliverFailed(ILogger logger, Exception exception, Guid taskId);
 }

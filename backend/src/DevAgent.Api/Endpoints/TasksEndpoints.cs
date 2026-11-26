@@ -21,7 +21,7 @@ internal static class TasksEndpoints
     {
         var group = api.MapGroup("/tasks").WithTags("Tasks");
 
-        // Dashboard/API tạo task. Header Idempotency-Key bắt buộc: gửi lặp cùng khóa trả về cùng task (200 thay vì 201).
+        // Idempotency-Key is required: repeating the same key returns the same task (200 instead of 201).
         group.MapPost("/", async (
                 CreateTaskRequest body,
                 [FromHeader(Name = IdempotencyHeader)] string? idempotencyKey,
@@ -50,7 +50,7 @@ internal static class TasksEndpoints
                 (await handler.HandleAsync(new GetTaskQuery(taskId), ct)).ToHttp())
             .WithName("GetTask");
 
-        // Đọc bù timeline sau khi mất kết nối SignalR: ?after=<sequence cuối cùng client đã có>.
+        // Timeline replay after a SignalR reconnect: ?after=<last sequence the client has>.
         group.MapGet("/{taskId:guid}/timeline", async (
                 Guid taskId,
                 long? after,

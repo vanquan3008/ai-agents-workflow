@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using DevAgent.Application.Abstractions.Messaging;
+using DevAgent.Application.AgentRuntime.Jobs;
 using DevAgent.Application.Options;
-using DevAgent.Application.Orchestration;
 using DevAgent.Infrastructure.Options;
+using DevAgent.Worker.Hosting;
+using DevAgent.Worker.Jobs;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
@@ -12,8 +14,8 @@ using MsOptions = Microsoft.Extensions.Options.Options;
 namespace DevAgent.Worker.Tests;
 
 /// <summary>
-/// Bất biến của vòng xử lý job: luôn trả lượt xử lý; mất (hoặc không chắc còn) lease thì hủy và không ghi kết quả;
-/// lỗi tạm thời dùng Retry-After; lỗi vĩnh viễn vào dead-letter ngay.
+/// Invariants of the processing loop: slots are always returned; a lost (or uncertain) lease cancels work and records nothing;
+/// transient failures honour Retry-After; permanent failures dead-letter immediately.
 /// </summary>
 public sealed class JobProcessingServiceTests : IDisposable
 {
@@ -49,7 +51,7 @@ public sealed class JobProcessingServiceTests : IDisposable
 
     private LeasedJob Job(int attempt = 1) => new(Guid.NewGuid(), JobType, "{}", attempt, 5, _clock.GetUtcNow().AddSeconds(15));
 
-    /// <summary>Đẩy đồng hồ giả từng giây cho tới khi điều kiện đúng (timer chạy trên thread pool).</summary>
+    /// <summary>Advances the fake clock one second at a time until the condition holds (timers run on the thread pool).</summary>
     private async Task AdvanceUntilAsync(Func<bool> condition, int maxSeconds = 60)
     {
         for (var i = 0; i < maxSeconds && !condition(); i++)
@@ -74,9 +76,9 @@ public sealed class JobProcessingServiceTests : IDisposable
         await AdvanceUntilAsync(() => _service.FreeSlots == 2);
         await _service.DrainAsync(TimeSpan.FromSeconds(5));
 
-        _store.RenewAttempts.ShouldBeGreaterThanOrEqualTo(2); // thử lại khi còn hạn, rồi mới bỏ
+        _store.RenewAttempts.ShouldBeGreaterThanOrEqualTo(2); // retries while the lease is valid, then gives up
         _store.Completed.ShouldBeEmpty();
-        _store.Failed.ShouldBeEmpty();                        // không còn lease thì không ghi kết quả
+        _store.Failed.ShouldBeEmpty();                        // no lease, no recorded result
         _handler.WasCancelled.ShouldBeTrue();
     }
 

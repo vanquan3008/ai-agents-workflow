@@ -1,4 +1,3 @@
-using DevAgent.Application.Common;
 using DevAgent.Domain.Common;
 using DevAgent.Domain.Tasks;
 
@@ -69,25 +68,3 @@ public sealed record TimelineEntryDto(
 public sealed record TaskCreatedDto(Guid TaskId, string Status, bool Created);
 
 public sealed record TaskListFilter(AgentTaskStatus? Status, RepositoryId? RepositoryId, string? Search);
-
-/// <summary>Truy vấn đọc cho module Tasks.</summary>
-public interface ITaskQueries
-{
-    Task<PagedResult<TaskSummaryDto>> ListAsync(
-        IReadOnlyCollection<ProjectId> projectIds,
-        TaskListFilter filter,
-        PageRequest page,
-        CancellationToken cancellationToken);
-
-    Task<TaskDetailDto?> GetAsync(TaskId taskId, CancellationToken cancellationToken);
-
-    /// <summary>Lịch sử trạng thái sau <paramref name="afterSequence"/>, theo thứ tự tăng dần.</summary>
-    Task<IReadOnlyList<TimelineEntryDto>> GetTimelineAsync(TaskId taskId, long afterSequence, int limit, CancellationToken cancellationToken);
-
-    Task<ProjectId?> GetProjectIdAsync(TaskId taskId, CancellationToken cancellationToken);
-}
-
-internal static class TaskMapping
-{
-    public static string Api(this AgentTaskStatus status) => ApiNames.ToApi(status);
-}

@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Application: use case, port (interface) cho hạ tầng, hợp đồng gọi model. Chỉ phụ thuộc Domain. -->
+  <!-- Application: use cases, infrastructure ports and the model contract. Depends only on Domain. -->
   <PropertyGroup>
     <RootNamespace>DevAgent.Application</RootNamespace>
   </PropertyGroup>

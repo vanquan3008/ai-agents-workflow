@@ -6,8 +6,8 @@ namespace DevAgent.Infrastructure.Persistence.Configurations;
 internal static class ConfigurationExtensions
 {
     /// <summary>
-    /// Optimistic concurrency bằng cột hệ thống <c>xmin</c> của PostgreSQL: hai tiến trình sửa cùng aggregate
-    /// thì tiến trình lưu sau nhận <see cref="DbUpdateConcurrencyException"/> thay vì ghi đè im lặng.
+    /// Optimistic concurrency via PostgreSQL's <c>xmin</c> system column: when two processes modify the same aggregate,
+    /// the later save gets <see cref="DbUpdateConcurrencyException"/> instead of silently overwriting.
     /// </summary>
     public static void HasXminConcurrencyToken<T>(this EntityTypeBuilder<T> builder)
         where T : class =>

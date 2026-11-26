@@ -4,11 +4,11 @@ import { envResult } from '@/shared/config/env'
 import './index.css'
 
 const container = document.getElementById('root')
-if (!container) throw new Error('Không tìm thấy phần tử #root')
+if (!container) throw new Error('Missing #root element')
 const root = createRoot(container)
 
 if (!envResult.ok) {
-  // Cấu hình sai: hiển thị lý do thay vì trang trắng.
+  // Invalid configuration: explain why instead of rendering a blank page.
   root.render(
     <main className="mx-auto max-w-2xl p-8">
       <div className="border-destructive/40 bg-destructive/5 text-destructive rounded-xl border p-6" role="alert">

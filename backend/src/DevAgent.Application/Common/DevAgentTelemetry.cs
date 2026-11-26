@@ -4,8 +4,8 @@ using System.Diagnostics.Metrics;
 namespace DevAgent.Application.Common;
 
 /// <summary>
-/// Nguồn trace/metric dùng chung (BCL, không phụ thuộc OpenTelemetry). Hạ tầng đăng ký tên này với OTel.
-/// Tag chuẩn: <c>devagent.task_id</c>, <c>devagent.execution_id</c>, <c>devagent.job_id</c> để liên kết log–trace.
+/// Shared trace and metric sources (BCL only, no OpenTelemetry dependency); infrastructure registers this name with OTel.
+/// Standard tags <c>devagent.task_id</c>, <c>devagent.execution_id</c> and <c>devagent.job_id</c> correlate logs and traces.
 /// </summary>
 public static class DevAgentTelemetry
 {
@@ -18,9 +18,9 @@ public static class DevAgentTelemetry
 
     public static readonly Meter Meter = new(SourceName);
 
-    public static readonly Counter<long> JobsProcessed = Meter.CreateCounter<long>("devagent.jobs.processed", description: "Số job đã xử lý theo kết quả.");
+    public static readonly Counter<long> JobsProcessed = Meter.CreateCounter<long>("devagent.jobs.processed", description: "Processed jobs by outcome.");
 
-    public static readonly Counter<long> ModelTokens = Meter.CreateCounter<long>("devagent.model.tokens", unit: "{token}", description: "Token model đã dùng.");
+    public static readonly Counter<long> ModelTokens = Meter.CreateCounter<long>("devagent.model.tokens", unit: "{token}", description: "Model tokens consumed.");
 
-    public static readonly Histogram<double> JobDuration = Meter.CreateHistogram<double>("devagent.jobs.duration", unit: "s", description: "Thời lượng xử lý job.");
+    public static readonly Histogram<double> JobDuration = Meter.CreateHistogram<double>("devagent.jobs.duration", unit: "s", description: "Job processing duration.");
 }

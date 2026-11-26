@@ -1,7 +1,7 @@
 <Project>
   <!--
-    Quản lý phiên bản tập trung. Ghim theo dòng .NET 10 (LTS) như checklist mục 0.8.
-    Không nâng lên 11.x trước khi chủ dự án duyệt nâng TargetFramework.
+    Central package management, pinned to the .NET 10 (LTS) line.
+    Do not move to 11.x before the target framework upgrade is approved.
   -->
   <PropertyGroup>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
@@ -35,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup Label="AI providers">
-    <!-- SDK chính thức của Anthropic cho C#; chỉ được tham chiếu trong Infrastructure (adapter). -->
+    <!-- Official Anthropic C# SDK; referenced only by the Infrastructure adapter. -->
     <PackageVersion Include="Anthropic" Version="13.14.0" />
   </ItemGroup>
 

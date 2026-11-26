@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DevAgent.Infrastructure.Options;
 
-/// <summary>Cấu hình PostgreSQL. Chuỗi kết nối nằm ở <c>ConnectionStrings:Postgres</c> (secret, cấp qua env/user-secrets).</summary>
+/// <summary>PostgreSQL settings. The connection string is the secret <c>ConnectionStrings:Postgres</c> (env or user-secrets).</summary>
 public sealed class DatabaseOptions
 {
     public const string SectionName = "Database";
@@ -14,14 +14,13 @@ public sealed class DatabaseOptions
     [Range(0, 10)]
     public int MaxRetryCount { get; set; } = 3;
 
-    /// <summary>Áp migration khi API khởi động. Bật ở dev/compose; production chạy migration bundle riêng.</summary>
+    /// <summary>Apply migrations on API startup. Enabled in dev/compose; production runs a migration bundle.</summary>
     public bool ApplyMigrationsOnStartup { get; set; }
 
-    /// <summary>Log tham số SQL. Không bao giờ bật ở production.</summary>
+    /// <summary>Logs SQL parameters. Never enable in production.</summary>
     public bool EnableSensitiveDataLogging { get; set; }
 }
 
-/// <summary>Hàng đợi job bền vững trên PostgreSQL (checklist 0.8, 1.4).</summary>
 public sealed class JobQueueOptions
 {
     public const string SectionName = "JobQueue";
@@ -38,7 +37,7 @@ public sealed class JobQueueOptions
 
 public enum AiProvider
 {
-    /// <summary>Kết quả cố định, không gọi mạng. Dùng cho CI và phát triển (checklist 1.5).</summary>
+    /// <summary>Deterministic, offline. For CI and development.</summary>
     Fake = 1,
     Anthropic = 2,
 }
@@ -57,20 +56,17 @@ public sealed class ModelPriceOptions
 
 public sealed class AnthropicProviderOptions
 {
-    /// <summary>Secret. Cấp qua biến môi trường <c>Ai__Anthropic__ApiKey</c> hoặc user-secrets.</summary>
+    /// <summary>Secret, supplied through <c>Ai__Anthropic__ApiKey</c> or user-secrets.</summary>
     public string? ApiKey { get; set; }
 
-    /// <summary>Để trống dùng endpoint mặc định của SDK.</summary>
+    /// <summary>Empty uses the SDK's default endpoint.</summary>
     public string? BaseUrl { get; set; }
 
-    /// <summary>Bật fallback phía server khi model từ chối (refusal) — beta server-side-fallback.</summary>
+    /// <summary>Enables the server-side fallback beta when the model refuses.</summary>
     public bool EnableServerSideFallback { get; set; } = true;
 }
 
-/// <summary>
-/// Cấu hình nhà cung cấp AI. Đổi nhà cung cấp chỉ bằng <see cref="Provider"/> và thêm adapter;
-/// Application không đổi (checklist 0.5).
-/// </summary>
+/// <summary>AI provider settings. Switching providers only needs <see cref="Provider"/> and an adapter; the application is unchanged.</summary>
 public sealed class AiOptions
 {
     public const string SectionName = "Ai";
@@ -80,10 +76,10 @@ public sealed class AiOptions
     [Required]
     public string DefaultModel { get; set; } = "claude-opus-5-5";
 
-    /// <summary>Model theo mục đích (planner, coding, reviewer...). Thiếu thì dùng <see cref="DefaultModel"/>.</summary>
+    /// <summary>Model per purpose (planner, coding, reviewer...); falls back to <see cref="DefaultModel"/>.</summary>
     public Dictionary<string, string> Models { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Mức effort: low | medium | high | xhigh | max.</summary>
+    /// <summary>low | medium | high | xhigh | max.</summary>
     [RegularExpression("^(low|medium|high|xhigh|max)$")]
     public string Effort { get; set; } = "high";
 
@@ -93,7 +89,7 @@ public sealed class AiOptions
     [Range(0, 10)]
     public int MaxRetries { get; set; } = 2;
 
-    /// <summary>Đơn giá theo model (USD / 1 triệu token) để ước tính chi phí và kiểm tra ngân sách.</summary>
+    /// <summary>USD per million tokens by model, used for cost estimates and budget checks.</summary>
     public Dictionary<string, ModelPriceOptions> Pricing { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     public AnthropicProviderOptions Anthropic { get; set; } = new();
@@ -104,13 +100,13 @@ public sealed class AiOptions
 
 public enum GitHubMode
 {
-    /// <summary>Chưa cấu hình: mọi thao tác báo lỗi rõ ràng và task bị chặn.</summary>
+    /// <summary>Not configured: every call fails explicitly and tasks are blocked.</summary>
     Disabled = 1,
 
-    /// <summary>Dữ liệu giả lập xác định, chỉ cho Development/Testing.</summary>
+    /// <summary>Deterministic stand-in, Development/Testing only.</summary>
     Fake = 2,
 
-    /// <summary>GitHub App thật (Phase 2A).</summary>
+    /// <summary>Real GitHub App.</summary>
     App = 3,
 }
 
@@ -122,16 +118,16 @@ public sealed class GitHubOptions
 
     public long? AppId { get; set; }
 
-    /// <summary>Đường dẫn file private key (.pem) được mount dạng secret; không đặt nội dung key trong appsettings.</summary>
+    /// <summary>Path to the mounted private key (.pem); never put key material in appsettings.</summary>
     public string? PrivateKeyPath { get; set; }
 
-    /// <summary>Secret xác minh chữ ký webhook (X-Hub-Signature-256).</summary>
+    /// <summary>Secret for verifying webhook signatures (X-Hub-Signature-256).</summary>
     public string? WebhookSecret { get; set; }
 
     [Url]
     public string ApiBaseUrl { get; set; } = "https://api.github.com";
 
-    /// <summary>Nhãn issue kích hoạt DevAgent (checklist 2D: điều kiện kích hoạt).</summary>
+    /// <summary>Issue label that triggers DevAgent.</summary>
     public string IssueTriggerLabel { get; set; } = "devagent";
 
     [Range(60, 3600)]
@@ -144,21 +140,21 @@ public sealed class DiscordOptions
 
     public bool Enabled { get; set; }
 
-    /// <summary>Secret. Cấp qua <c>Discord__BotToken</c>.</summary>
+    /// <summary>Secret, supplied through <c>Discord__BotToken</c>.</summary>
     public string? BotToken { get; set; }
 
     public string? ApplicationId { get; set; }
 
     public string? GuildId { get; set; }
 
-    /// <summary>Kênh nhận thông báo cần duyệt/hoàn tất/lỗi.</summary>
+    /// <summary>Channel receiving approval, completion and failure notifications.</summary>
     public string? NotificationChannelId { get; set; }
 
     [Url]
     public string ApiBaseUrl { get; set; } = "https://discord.com/api/v10";
 }
 
-/// <summary>Giới hạn sandbox (checklist 2B, 0.7). Container non-root, không mount host, không Docker socket.</summary>
+/// <summary>Sandbox limits: non-root container, no host mounts, no Docker socket.</summary>
 public sealed class SandboxOptions
 {
     public const string SectionName = "Sandbox";
@@ -180,7 +176,7 @@ public sealed class SandboxOptions
     [Range(60, 86_400)]
     public int MaxLifetimeSeconds { get; set; } = 3600;
 
-    /// <summary>none | allowlist. Mặc định chặn mạng; allowlist cho phép các host trong <see cref="AllowedHosts"/>.</summary>
+    /// <summary>none | allowlist. Network is blocked by default; allowlist permits <see cref="AllowedHosts"/>.</summary>
     [RegularExpression("^(none|allowlist)$")]
     public string NetworkPolicy { get; set; } = "none";
 
@@ -194,7 +190,7 @@ public sealed class SecurityOptions
 {
     public const string SectionName = "Security";
 
-    /// <summary>Khóa AES-256 dạng base64 (32 byte) để mã hóa credential lưu trong DB. Secret.</summary>
+    /// <summary>Secret base64 AES-256 key (32 bytes) used to encrypt stored credentials.</summary>
     public string? EncryptionKey { get; set; }
 }
 
@@ -205,13 +201,13 @@ public sealed class ObservabilityOptions
     [Required]
     public string ServiceNamespace { get; set; } = "devagent";
 
-    /// <summary>Endpoint OTLP (vd http://otel-collector:4317). Để trống thì không xuất trace/metric.</summary>
+    /// <summary>OTLP endpoint (e.g. http://otel-collector:4317). Empty disables trace/metric export.</summary>
     public string? OtlpEndpoint { get; set; }
 
     [RegularExpression("^(grpc|http/protobuf)$")]
     public string OtlpProtocol { get; set; } = "grpc";
 
-    /// <summary>json: một dòng JSON/sự kiện cho máy đọc (mặc định); text: dễ đọc khi phát triển.</summary>
+    /// <summary>json: one machine-readable line per event (default); text: human-friendly for development.</summary>
     [RegularExpression("^(json|text)$")]
     public string ConsoleFormat { get; set; } = "json";
 }
@@ -220,14 +216,14 @@ public sealed class SuperAdminBootstrap
 {
     public string? Email { get; set; }
 
-    /// <summary>Secret. Cấp qua biến môi trường <c>Bootstrap__SuperAdmin__Password</c>; là mật khẩu tạm, bắt đổi ở lần đăng nhập đầu.</summary>
+    /// <summary>Secret temporary password from <c>Bootstrap__SuperAdmin__Password</c>; must be changed on first sign-in.</summary>
     public string? Password { get; set; }
 
     [Required]
     public string DisplayName { get; set; } = "Super Admin";
 }
 
-/// <summary>Dữ liệu khởi tạo hệ thống: chỉ tài khoản Super Admin đầu tiên.</summary>
+/// <summary>System bootstrap data: only the first super admin account.</summary>
 public sealed class BootstrapOptions
 {
     public const string SectionName = "Bootstrap";

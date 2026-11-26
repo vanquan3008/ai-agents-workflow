@@ -2,16 +2,9 @@ using DevAgent.Domain.Common;
 
 namespace DevAgent.Domain.Auditing;
 
-public enum AuditOutcome
-{
-    Allowed = 1,
-    Denied = 2,
-    Failed = 3,
-}
-
 /// <summary>
-/// Bản ghi audit bất biến (append-only): ai làm gì, trên tài nguyên nào, được phép hay bị từ chối, vì sao.
-/// Dữ liệu đi kèm phải đã được che token/secret trước khi tạo bản ghi.
+/// Immutable, append-only audit record: who did what to which resource, whether it was allowed and why.
+/// Attached data must already be free of tokens and secrets.
 /// </summary>
 public sealed class AuditEntry : Entity<AuditEntryId>
 {

@@ -1,4 +1,5 @@
-# secrets/
+# Local secrets
 
-Thư mục chứa file secret dùng khi chạy local (vd `github-app.pem`). Mọi file ở đây trừ README đều bị `.gitignore` bỏ qua.
-Ở môi trường thật, dùng secret manager của nền tảng (GitHub Actions secrets, Docker/K8s secrets, Key Vault...).
+Store local development secret files here when an integration needs a file, such as `github-app.pem`. Git ignores the contents of this directory apart from this README.
+
+For deployed environments, use the platform's secret store, such as GitHub Actions secrets, Docker or Kubernetes secrets, or Azure Key Vault. See [configuration and secrets](../README.md#configuration-and-secrets).

@@ -1,12 +1,14 @@
 using System.Text.Json;
 using DevAgent.Application.Abstractions.Ai;
 using DevAgent.Application.Abstractions.Messaging;
+using DevAgent.Application.AgentRuntime.Budget;
+using DevAgent.Application.AgentRuntime.Jobs;
+using DevAgent.Application.AgentRuntime.Orchestration;
+using DevAgent.Application.AgentRuntime.Planner;
+using DevAgent.Application.AgentRuntime.Steps;
 using DevAgent.Application.Common;
+using DevAgent.Application.Features.Notifications;
 using DevAgent.Application.Features.Workflows;
-using DevAgent.Application.Notifications;
-using DevAgent.Application.Orchestration;
-using DevAgent.Application.Orchestration.Agents;
-using DevAgent.Application.Orchestration.Steps;
 using DevAgent.Application.Tests.Fakes;
 using DevAgent.Domain.Common;
 using DevAgent.Domain.Executions;
@@ -64,12 +66,12 @@ public sealed class WorkflowAndBudgetTests
         new(plan, ApprovalRequirement.OnSensitive, plannerAttempts, 3, FindingSeverity.High, true,
             new PullRequestSettings(false, [], "", []), Enum.GetValues<NotificationEvent>(), new StepModelOverrides(plannerModel, null, null));
 
-    // ---------------- Ngân sách ----------------
+    // ---------------- Budget ----------------
 
     [Fact]
     public async Task Output_cap_of_next_call_is_derived_from_remaining_budget()
     {
-        _fx.Limits.MaxCostUsdPerTask = 0.05m; // 10 USD / 1M token đầu ra → còn đủ cho 5.000 token
+        _fx.Limits.MaxCostUsdPerTask = 0.05m; // 10 USD per 1M output tokens leaves room for 5,000 tokens
         var task = NewTask();
         var model = new ScriptedModelClient(Plan("src/Tasks/A.cs", "tests/Tasks/ATests.cs")) { Price = _ => Paid };
         var orchestrator = Orchestrator(model);
@@ -89,7 +91,7 @@ public sealed class WorkflowAndBudgetTests
         var orchestrator = Orchestrator(model);
         await orchestrator.AdvanceAsync(task.Id, "w", CancellationToken.None);
         var spent = AgentExecution.Start(task.Id, AgentStep.Planner, 1, null, "m", "w", _fx.Clock.GetUtcNow());
-        spent.RecordModelCall(new TokenUsage(0, 0, 0, 0.045m)); // còn 0,005 USD = 500 token < 1.024
+        spent.RecordModelCall(new TokenUsage(0, 0, 0, 0.045m)); // 0.005 USD left = 500 tokens < 1,024
         spent.Succeed(_fx.Clock.GetUtcNow());
         _fx.Store.Executions.Add(spent);
 
@@ -146,7 +148,7 @@ public sealed class WorkflowAndBudgetTests
         _fx.Store.Executions.Single().ModelCalls.ShouldBe(1);
     }
 
-    // ---------------- Giới hạn thử lại Planner theo lượt ----------------
+    // ---------------- Planner retries per planning round ----------------
 
     [Fact]
     public async Task Planner_failures_from_previous_round_do_not_block_retry()
@@ -166,13 +168,13 @@ public sealed class WorkflowAndBudgetTests
 
         _fx.Clock.Advance(TimeSpan.FromSeconds(1));
         task.Retry(_fx.Requester.Id, maxRetries: 2, _fx.Clock.GetUtcNow());
-        await orchestrator.AdvanceAsync(task.Id, "w", CancellationToken.None); // PENDING → PLANNING (lượt mới)
+        await orchestrator.AdvanceAsync(task.Id, "w", CancellationToken.None); // PENDING → PLANNING (new round)
         await orchestrator.AdvanceAsync(task.Id, "w", CancellationToken.None);
 
         task.Status.ShouldBe(AgentTaskStatus.InProgress);
         var planner = _fx.Store.Executions.Where(e => e.Step == AgentStep.Planner).ToList();
-        planner.Count.ShouldBe(4);                       // lịch sử được giữ
-        planner.Max(e => e.Attempt).ShouldBe(4);         // đánh số tiếp tục
+        planner.Count.ShouldBe(4);                       // history is kept
+        planner.Max(e => e.Attempt).ShouldBe(4);         // numbering continues
     }
 
     [Fact]
@@ -196,7 +198,7 @@ public sealed class WorkflowAndBudgetTests
         task.Status.ShouldBe(AgentTaskStatus.InProgress);
     }
 
-    // ---------------- Quy trình mức 2 ----------------
+    // ---------------- Repository workflows ----------------
 
     [Fact]
     public async Task Failed_model_request_still_consumes_call_quota()
@@ -234,7 +236,7 @@ public sealed class WorkflowAndBudgetTests
     {
         var task = NewTask();
         var orchestrator = Orchestrator(new ScriptedModelClient(Plan("src/Tasks/A.cs")));
-        await orchestrator.AdvanceAsync(task.Id, "w", CancellationToken.None); // chụp quy trình mặc định v0
+        await orchestrator.AdvanceAsync(task.Id, "w", CancellationToken.None); // snapshots the default workflow v0
 
         _fx.Repository.UpdateWorkflow(Workflow(ApprovalRequirement.Always), 0, _fx.Owner.Id, null, _fx.Clock.GetUtcNow());
         await orchestrator.AdvanceAsync(task.Id, "w", CancellationToken.None);
@@ -279,7 +281,7 @@ public sealed class WorkflowAndBudgetTests
         running.Error!.ShouldContain("Lease hết hạn");
     }
 
-    // ---------------- Outbox thông báo ----------------
+    // ---------------- Notification outbox ----------------
 
     [Fact]
     public async Task Notification_job_is_enqueued_for_notifiable_transitions_only()
@@ -301,7 +303,7 @@ public sealed class WorkflowAndBudgetTests
         _fx.Store.Jobs.ShouldAllBe(j => j.Type == JobTypes.SendNotification);
     }
 
-    // ---------------- Sửa quy trình ----------------
+    // ---------------- Workflow updates ----------------
 
     private UpdateRepositoryWorkflowHandler UpdateHandler() =>
         new(_fx.Access, _fx.Store, _fx.Store, _fx.Store, _fx.Store, MsOptions.Create(_fx.Limits), _fx.Clock);
@@ -321,7 +323,7 @@ public sealed class WorkflowAndBudgetTests
         result.IsSuccess.ShouldBeTrue();
         result.Value.Version.ShouldBe(1);
         result.Value.Definition.PlanApproval.ShouldBe("ALWAYS");
-        result.Value.Definition.NotifyOn.ShouldContain("APPROVAL_REQUIRED"); // bắt buộc, tự thêm
+        result.Value.Definition.NotifyOn.ShouldContain("APPROVAL_REQUIRED"); // mandatory, added automatically
         _fx.Store.Revisions.ShouldHaveSingleItem().Comment.ShouldBe("siết duyệt");
         _fx.Store.Audit.ShouldContain(a => a.Action == "repository.workflow.update");
     }

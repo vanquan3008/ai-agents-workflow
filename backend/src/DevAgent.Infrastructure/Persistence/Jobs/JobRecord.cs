@@ -6,13 +6,13 @@ public enum JobStatus
     Leased = 2,
     Completed = 3,
 
-    /// <summary>Hết số lần thử: chờ người vận hành xử lý (checklist 1.4).</summary>
+    /// <summary>Out of attempts; waiting for reconciliation and operator attention.</summary>
     DeadLetter = 4,
 }
 
 /// <summary>
-/// Bản ghi hàng đợi bền vững. Không phải khái niệm domain nên nằm ở Infrastructure.
-/// Lưu cùng giao dịch với thay đổi nghiệp vụ (transactional outbox).
+/// Durable queue row. Not a domain concept, so it lives in infrastructure.
+/// Saved in the same transaction as the business change (transactional outbox).
 /// </summary>
 public sealed class JobRecord
 {
@@ -44,9 +44,8 @@ public sealed class JobRecord
 
     public DateTimeOffset? CompletedAt { get; set; }
 
-    /// <summary>Thời điểm chuyển dead-letter.</summary>
     public DateTimeOffset? DeadLetteredAt { get; set; }
 
-    /// <summary>Thời điểm đã đối soát trạng thái nghiệp vụ cho job dead-letter (null = chưa).</summary>
+    /// <summary>When business state was reconciled for a dead-lettered job; null until then.</summary>
     public DateTimeOffset? ReconciledAt { get; set; }
 }

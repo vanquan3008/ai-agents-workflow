@@ -1,6 +1,4 @@
-/**
- * Kiểu dữ liệu khớp DTO của backend (/api/v1). Trạng thái dùng UPPER_SNAKE như tài liệu thiết kế.
- */
+/** Types mirroring the backend /api/v1 DTOs. Enum values use UPPER_SNAKE like the API contract. */
 
 export type TaskStatus =
   | 'PENDING'
@@ -54,7 +52,7 @@ export interface Project {
   id: string
   name: string
   slug: string
-  /** Vai trò của người xem; Super Admin không là thành viên thì là SUPER_ADMIN. */
+  /** The viewer's role; SUPER_ADMIN when a super admin is not a member. */
   myRole: ProjectRole | 'SUPER_ADMIN'
   memberCount: number
   repositoryCount: number
@@ -220,7 +218,7 @@ export interface TaskCreated {
   created: boolean
 }
 
-/** Sự kiện SignalR "taskEvent". */
+/** Payload of the SignalR "taskEvent" message. */
 export interface TaskRealtimeEvent {
   taskId: string
   projectId: string
@@ -231,7 +229,7 @@ export interface TaskRealtimeEvent {
   occurredAt: string
 }
 
-// ---------- Quy trình (mức 2) ----------
+// ---------- Repository workflows ----------
 
 export type ApprovalRequirement = 'ON_SENSITIVE' | 'ALWAYS'
 export type FindingSeverity = 'LOW' | 'MEDIUM' | 'HIGH'

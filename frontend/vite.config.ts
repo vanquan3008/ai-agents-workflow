@@ -6,7 +6,7 @@ import { defineConfig, loadEnv } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  // Biến không có tiền tố VITE_ chỉ dùng lúc build/dev server, không vào bundle.
+  // Variables without the VITE_ prefix are only visible to the build/dev server, never to the bundle.
   const env = loadEnv(mode, process.cwd(), '')
   const proxyTarget = env.DEV_PROXY_TARGET || 'http://localhost:5080'
 
@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: Number(env.DEV_SERVER_PORT || 5173),
       strictPort: true,
-      // Dev: gọi cùng origin, Vite chuyển tiếp tới API để tránh CORS và cookie khác site.
+      // Same-origin calls in dev: Vite proxies to the API, avoiding CORS and cross-site cookies.
       proxy: {
         '/api': { target: proxyTarget, changeOrigin: true },
         '/hubs': { target: proxyTarget, changeOrigin: true, ws: true },
@@ -26,7 +26,6 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      sourcemap: true,
       target: 'es2023',
     },
     test: {

@@ -6,14 +6,13 @@ using DevAgent.Application.Abstractions.Security;
 namespace DevAgent.Infrastructure.Security;
 
 /// <summary>
-/// Băm mật khẩu bằng PBKDF2-HMAC-SHA512 có muối ngẫu nhiên 16 byte.
-/// Định dạng tự mô tả: <c>pbkdf2-sha512${iterations}${salt}${hash}</c> (base64), nên có thể tăng số vòng lặp
-/// mà vẫn kiểm tra được chuỗi băm cũ (trả <see cref="PasswordVerification.SuccessRehashNeeded"/> để băm lại).
-/// So sánh bằng thời gian hằng.
+/// PBKDF2-HMAC-SHA512 with a random 16-byte salt. The self-describing format
+/// <c>pbkdf2-sha512${iterations}${salt}${hash}</c> (base64) lets the iteration count grow while older hashes still verify
+/// (returning <see cref="PasswordVerification.SuccessRehashNeeded"/>). Comparison is constant-time.
 /// </summary>
 internal sealed class Pbkdf2PasswordHasher : IPasswordHasher
 {
-    /// <summary>Theo khuyến nghị OWASP 2023+ cho PBKDF2-HMAC-SHA512.</summary>
+    /// <summary>OWASP 2023+ recommendation for PBKDF2-HMAC-SHA512.</summary>
     public const int Iterations = 210_000;
 
     private const string Algorithm = "pbkdf2-sha512";

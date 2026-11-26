@@ -1,7 +1,7 @@
 namespace DevAgent.Domain.Common;
 
-// Định danh kiểu mạnh: không thể truyền nhầm TaskId vào chỗ cần ProjectId.
-// Guid v7 có thứ tự theo thời gian, thân thiện với chỉ mục B-tree của PostgreSQL.
+// Strongly typed identifiers so a TaskId can never be passed where a ProjectId is expected.
+// Guid v7 values are time-ordered, which keeps PostgreSQL B-tree indexes compact.
 
 public readonly record struct UserId(Guid Value)
 {

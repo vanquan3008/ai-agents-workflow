@@ -18,8 +18,8 @@ internal static class DevAgentClaims
 }
 
 /// <summary>
-/// Cấp access token JWT ký HS256 và refresh token ngẫu nhiên 256 bit (chỉ lưu SHA-256 của nó).
-/// Token mang security stamp; đổi mật khẩu/vai trò/khóa tài khoản làm token cũ bị từ chối ở bước xác thực.
+/// Issues HS256 JWT access tokens and random 256-bit refresh tokens (only their SHA-256 is stored).
+/// Tokens carry the security stamp, so password, role or activation changes invalidate older tokens.
 /// </summary>
 internal sealed class JwtTokenService(IOptions<AuthOptions> options, TimeProvider clock) : ITokenService
 {

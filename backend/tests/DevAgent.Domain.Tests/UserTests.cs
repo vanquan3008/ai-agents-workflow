@@ -48,7 +48,7 @@ public sealed class UserTests
         stamps.Add(user.SecurityStamp).ShouldBeTrue();
 
         var before = user.SecurityStamp;
-        user.UpgradePasswordHash("hash-2"); // băm lại cùng mật khẩu: không làm mất phiên
+        user.UpgradePasswordHash("hash-2"); // re-hashing the same password keeps sessions valid
         user.SecurityStamp.ShouldBe(before);
         user.MustChangePassword.ShouldBeTrue();
     }

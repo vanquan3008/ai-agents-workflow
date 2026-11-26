@@ -4,8 +4,8 @@ using DevAgent.Domain.Policies;
 namespace DevAgent.Domain.Tasks;
 
 /// <summary>
-/// Một phiên bản kế hoạch do Planner tạo. Quyết định duyệt gắn với <see cref="Version"/>;
-/// nếu kế hoạch đổi, phải duyệt lại.
+/// One plan version produced by the Planner. Approvals are bound to <see cref="Version"/>,
+/// so a changed plan must be approved again.
 /// </summary>
 public sealed class TaskPlan : Entity<TaskPlanId>
 {

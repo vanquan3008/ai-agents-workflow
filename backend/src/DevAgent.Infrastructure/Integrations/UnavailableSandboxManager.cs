@@ -4,8 +4,8 @@ using DevAgent.Application.Common;
 namespace DevAgent.Infrastructure.Integrations;
 
 /// <summary>
-/// Sandbox chưa triển khai (Phase 2B). Cấu hình giới hạn đã có trong <see cref="Options.SandboxOptions"/>;
-/// adapter Docker sẽ áp dụng: non-root, giới hạn CPU/RAM/thời gian, chặn mạng, không mount host/Docker socket.
+/// Placeholder until the Docker sandbox exists. Limits are already modelled in <see cref="Options.SandboxOptions"/>:
+/// non-root, CPU/RAM/time caps, no network, no host mounts and no Docker socket.
 /// </summary>
 internal sealed class UnavailableSandboxManager : ISandboxManager
 {

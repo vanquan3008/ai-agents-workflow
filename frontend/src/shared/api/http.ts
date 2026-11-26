@@ -1,7 +1,7 @@
 import { session } from '@/features/auth/session'
 import { env } from '@/shared/config/env'
 
-/** Lỗi API theo ProblemDetails (RFC 9457) mà backend trả về, kèm mã ổn định `code`. */
+/** API error parsed from the backend's RFC 9457 ProblemDetails, including its stable `code`. */
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
@@ -25,7 +25,7 @@ export class ApiError extends Error {
     return this.status === 404
   }
 
-  /** Lỗi đầu tiên của một trường (để hiện dưới ô nhập). */
+  /** Errors of one field, joined for display under its input. */
   field(name: string): string | undefined {
     return this.errors[name]?.join(' ')
   }
@@ -45,7 +45,7 @@ export interface RequestOptions {
   headers?: Record<string, string>
   signal?: AbortSignal
   query?: Record<string, string | number | boolean | null | undefined>
-  /** Bỏ qua cơ chế tự refresh (dùng cho chính endpoint xác thực). */
+  /** Skips the automatic refresh; used by the auth endpoints themselves. */
   skipAuthRefresh?: boolean
 }
 
@@ -65,7 +65,7 @@ export async function parseProblem(response: Response): Promise<ApiError> {
   try {
     problem = (await response.json()) as ProblemDetails
   } catch {
-    // Phản hồi không phải JSON (proxy lỗi, 502...).
+    // Non-JSON response (proxy error, 502...).
   }
   return new ApiError(
     response.status,
@@ -94,8 +94,8 @@ function send(path: string, options: RequestOptions): Promise<Response> {
 }
 
 /**
- * Gọi API dùng chung: base URL, bearer token, JSON và chuẩn hóa lỗi.
- * Gặp 401 thì refresh phiên một lần rồi gửi lại; refresh thất bại thì phiên bị xóa và giao diện về trang đăng nhập.
+ * Shared API call: base URL, bearer token, JSON and normalized errors.
+ * A 401 triggers one session refresh and a retry; a failed refresh clears the session and the UI returns to sign-in.
  */
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   let response = await send(path, options)
@@ -106,7 +106,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (!response.ok) {
     const error = await parseProblem(response)
     if (error.code === 'auth.password_change_required' && session.current.status === 'authenticated') {
-      // Server yêu cầu đổi mật khẩu: đồng bộ cờ để route guard chuyển trang.
+      // The server demands a password change: sync the flag so the route guard redirects.
       session.apply({
         accessToken: session.current.accessToken,
         expiresAt: new Date(session.current.expiresAt).toISOString(),
@@ -119,7 +119,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return (await response.json()) as T
 }
 
-/** Khóa chống gửi trùng cho thao tác tạo: giữ nguyên khi người dùng bấm lại hoặc mạng thử lại. */
+/** Deduplication key for create operations; stays the same across double clicks and network retries. */
 export function newIdempotencyKey(prefix = 'dash'): string {
   return `${prefix}-${crypto.randomUUID()}`
 }

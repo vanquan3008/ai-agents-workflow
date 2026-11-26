@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore.Design;
 namespace DevAgent.Infrastructure.Persistence;
 
 /// <summary>
-/// Dùng bởi <c>dotnet ef</c> khi tạo migration: không cần khởi động API hay có DB thật.
-/// Khi chạy <c>database update</c>, chuỗi kết nối lấy từ biến môi trường <c>ConnectionStrings__Postgres</c>.
+/// Used by <c>dotnet ef</c> to create migrations without starting the API or a database.
+/// <c>database update</c> reads the connection string from <c>ConnectionStrings__Postgres</c>.
 /// </summary>
 internal sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<DevAgentDbContext>
 {

@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!userId) void taskHub.disconnect()
   }, [userId])
 
-  // Khôi phục phiên từ cookie refresh khi mở trang.
+  // Restore the session from the refresh cookie on page load.
   useEffect(() => {
     if (session.current.status === 'loading') void session.refresh()
   }, [])
@@ -65,6 +65,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth(): AuthContextValue {
   const context = use(AuthContext)
-  if (!context) throw new Error('useAuth phải nằm trong AuthProvider')
+  if (!context) throw new Error('useAuth must be used inside AuthProvider')
   return context
 }

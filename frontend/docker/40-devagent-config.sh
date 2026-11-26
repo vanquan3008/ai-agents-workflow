@@ -1,9 +1,9 @@
 #!/bin/sh
-# Sinh cấu hình runtime cho dashboard từ biến môi trường DEVAGENT_* lúc container khởi động.
-# nginx phục vụ file này tại /config.js (xem nginx.conf). Không đặt secret vào các biến này.
+# Renders the dashboard runtime configuration from DEVAGENT_* variables when the container starts.
+# nginx serves it at /config.js (see nginx.conf). Never put secrets in these variables.
 set -eu
 
-# Thoát ký tự \ và " để giá trị nằm an toàn trong chuỗi JSON.
+# Escape \ and " so values stay valid inside JSON strings.
 json_escape() {
   printf '%s' "$1" | sed 's/[\\"]/\\&/g'
 }
@@ -17,4 +17,4 @@ APP_NAME=$(json_escape "${DEVAGENT_APP_NAME:-DevAgent}")
 printf 'window.__DEVAGENT_CONFIG__ = {\n  "ENVIRONMENT": "%s",\n  "API_BASE_URL": "%s",\n  "SIGNALR_HUB_PATH": "%s",\n  "APP_NAME": "%s"\n};\n' \
   "$ENVIRONMENT" "$API_BASE_URL" "$SIGNALR_HUB_PATH" "$APP_NAME" > "$OUT"
 
-echo "devagent: đã sinh $OUT (ENVIRONMENT=${DEVAGENT_ENVIRONMENT:-Production})"
+echo "devagent: generated $OUT (ENVIRONMENT=${DEVAGENT_ENVIRONMENT:-Production})"

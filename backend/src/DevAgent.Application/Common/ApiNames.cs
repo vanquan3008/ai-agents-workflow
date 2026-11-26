@@ -2,15 +2,13 @@ using System.Text;
 
 namespace DevAgent.Application.Common;
 
-/// <summary>
-/// Chuyển tên enum giữa dạng PascalCase (C#) và UPPER_SNAKE (API, khớp tài liệu: WAITING_FOR_APPROVAL).
-/// </summary>
+/// <summary>Converts enum names between PascalCase (C#) and UPPER_SNAKE (API contract, e.g. WAITING_FOR_APPROVAL).</summary>
 public static class ApiNames
 {
     public static string ToApi<TEnum>(TEnum value)
         where TEnum : struct, Enum
     {
-        // "GitHub" là một từ: GitHubIssue -> GITHUB_ISSUE thay vì GIT_HUB_ISSUE.
+        // Treat "GitHub" as one word: GitHubIssue -> GITHUB_ISSUE rather than GIT_HUB_ISSUE.
         var name = value.ToString().Replace("GitHub", "Github", StringComparison.Ordinal);
         var sb = new StringBuilder(name.Length + 8);
         for (var i = 0; i < name.Length; i++)
@@ -27,7 +25,7 @@ public static class ApiNames
         return sb.ToString();
     }
 
-    /// <summary>Tách enum [Flags] thành danh sách tên API, bỏ giá trị 0.</summary>
+    /// <summary>Expands a [Flags] enum into API names, skipping the zero value.</summary>
     public static IReadOnlyList<string> FlagsToApi<TEnum>(TEnum value)
         where TEnum : struct, Enum
     {

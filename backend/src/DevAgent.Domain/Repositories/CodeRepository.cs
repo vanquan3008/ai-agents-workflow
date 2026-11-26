@@ -4,15 +4,9 @@ using DevAgent.Domain.Workflows;
 
 namespace DevAgent.Domain.Repositories;
 
-public enum SourceControlProvider
-{
-    GitHub = 1,
-}
-
 /// <summary>
-/// Repo đã đăng ký vào một project qua GitHub App installation.
-/// Đặt tên CodeRepository để không nhầm với pattern Repository của DDD.
-/// Credential không nằm ở đây: token ngắn hạn do thành phần tích hợp cấp khi cần.
+/// A source repository registered to a project through a GitHub App installation. Named CodeRepository to avoid
+/// confusion with the DDD repository pattern. No credentials live here: short-lived tokens are issued on demand.
 /// </summary>
 public sealed class CodeRepository : AggregateRoot<RepositoryId>
 {
@@ -64,7 +58,7 @@ public sealed class CodeRepository : AggregateRoot<RepositoryId>
 
     public RepositoryPolicy Policy { get; private set; }
 
-    /// <summary>Quy trình hiện hành. Phiên bản 0 là quy trình mặc định của hệ thống.</summary>
+    /// <summary>The current workflow. Version 0 means the system default.</summary>
     public WorkflowDefinition Workflow { get; private set; }
 
     public int WorkflowVersion { get; private set; }
@@ -111,8 +105,8 @@ public sealed class CodeRepository : AggregateRoot<RepositoryId>
     }
 
     /// <summary>
-    /// Đổi quy trình với kiểm tra phiên bản (optimistic): người sửa phải dựa trên phiên bản hiện hành,
-    /// tránh hai người ghi đè nhau. Trả về bản ghi lịch sử để lưu append-only.
+    /// Replaces the workflow with an optimistic version check so concurrent editors cannot overwrite each other.
+    /// Returns the append-only revision to persist.
     /// </summary>
     public WorkflowRevision UpdateWorkflow(WorkflowDefinition definition, int expectedVersion, UserId changedBy, string? comment, DateTimeOffset now)
     {

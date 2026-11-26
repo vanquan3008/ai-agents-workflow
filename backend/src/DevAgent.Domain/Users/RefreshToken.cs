@@ -2,17 +2,10 @@ using DevAgent.Domain.Common;
 
 namespace DevAgent.Domain.Users;
 
-public readonly record struct RefreshTokenId(Guid Value)
-{
-    public static RefreshTokenId New() => new(Guid.CreateVersion7());
-
-    public override string ToString() => Value.ToString();
-}
-
 /// <summary>
-/// Refresh token xoay vòng. Chỉ lưu băm của token (token thật chỉ nằm trong cookie của trình duyệt).
-/// Các token sinh nối tiếp nhau chung một <see cref="FamilyId"/>: nếu một token đã bị thay thế mà vẫn được dùng
-/// lại (dấu hiệu bị đánh cắp), cả họ token bị thu hồi.
+/// Rotating refresh token. Only the hash is stored; the raw value lives in the browser cookie.
+/// Tokens issued in sequence share a <see cref="FamilyId"/>: reusing an already rotated token signals theft
+/// and revokes the whole family.
 /// </summary>
 public sealed class RefreshToken : AggregateRoot<RefreshTokenId>
 {
@@ -55,7 +48,6 @@ public sealed class RefreshToken : AggregateRoot<RefreshTokenId>
 
     public bool IsActive(DateTimeOffset now) => RevokedAt is null && ExpiresAt > now;
 
-    /// <summary>Token đã được dùng để xoay sang token mới.</summary>
     public bool WasRotated => ReplacedBy is not null;
 
     public static RefreshToken Issue(UserId userId, string tokenHash, Guid? familyId, DateTimeOffset now, TimeSpan lifetime, string? ip, string? userAgent)
@@ -76,7 +68,7 @@ public sealed class RefreshToken : AggregateRoot<RefreshTokenId>
             Guard.Optional(userAgent, "user_agent", 500));
     }
 
-    /// <summary>Xoay vòng: thu hồi token này và trỏ tới token kế tiếp cùng họ.</summary>
+    /// <summary>Revokes this token and points it at its successor in the same family.</summary>
     public void RotateTo(RefreshTokenId next, DateTimeOffset now)
     {
         if (!IsActive(now))

@@ -3,14 +3,16 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using DevAgent.Application.Abstractions.Integrations;
 using DevAgent.Application.Abstractions.Messaging;
-using DevAgent.Application.Abstractions.Persistence;
+using DevAgent.Application.AgentRuntime.Jobs;
+using DevAgent.Application.AgentRuntime.Orchestration;
+using DevAgent.Application.AgentRuntime.Steps;
 using DevAgent.Application.Features.Approvals;
+using DevAgent.Application.Features.Notifications;
 using DevAgent.Application.Features.Tasks;
-using DevAgent.Application.Notifications;
-using DevAgent.Application.Orchestration;
 using DevAgent.Domain.Common;
 using DevAgent.Domain.Executions;
 using DevAgent.Domain.Tasks;
+using DevAgent.Domain.Tasks.Repositories;
 using DevAgent.Domain.Workflows;
 using DevAgent.Infrastructure.Persistence;
 using DevAgent.Infrastructure.Persistence.Jobs;
@@ -44,7 +46,7 @@ public sealed class ReliabilityAndWorkflowTests(ApiFactory factory) : IClassFixt
         TaskId taskId;
         Guid jobId;
 
-        // Dựng tình huống: task đang PLANNING, execution đang chạy, job ở lần thử cuối với lease đã hết hạn.
+        // Arrange: task in PLANNING, a running execution, and a job on its last attempt with an expired lease.
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<DevAgentDbContext>();
@@ -74,7 +76,7 @@ public sealed class ReliabilityAndWorkflowTests(ApiFactory factory) : IClassFixt
             taskId = task.Id;
         }
 
-        // Lần quét nhận việc kế tiếp chuyển job sang dead-letter; bước đối soát cập nhật task.
+        // The next lease sweep dead-letters the job; reconciliation then updates the task.
         using (var scope = factory.Services.CreateScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IJobStore>();
@@ -83,7 +85,7 @@ public sealed class ReliabilityAndWorkflowTests(ApiFactory factory) : IClassFixt
             var mine = dead.Single(d => d.Id == jobId);
 
             var orchestrator = ActivatorUtilities.CreateInstance<AgentOrchestrator>(scope.ServiceProvider,
-                (IEnumerable<Application.Orchestration.Steps.IWorkflowStep>)[]);
+                (IEnumerable<Application.AgentRuntime.Steps.IWorkflowStep>)[]);
             var handler = ActivatorUtilities.CreateInstance<ProcessTaskJobHandler>(scope.ServiceProvider, (IAgentOrchestrator)orchestrator, new StubWorker());
             await handler.OnDeadLetterAsync(mine, ct);
             await store.CompleteDeadLetterAsync(mine.Id, ct);
@@ -135,7 +137,7 @@ public sealed class ReliabilityAndWorkflowTests(ApiFactory factory) : IClassFixt
             await db.Entry(await db.Jobs.SingleAsync(job => job.Id == jobId, ct)).ReloadAsync(ct);
             (await db.Jobs.SingleAsync(job => job.Id == jobId, ct)).ReconciledAt.ShouldBeNull();
 
-            // Mô phỏng tiến trình chết sau khi nhận đối soát: lease hết hạn phải nhận lại được.
+            // Simulate a crash after claiming reconciliation: the expired claim must be claimable again.
             await db.Database.ExecuteSqlAsync(
                 $"UPDATE devagent.jobs SET leased_until = now() - interval '1 second' WHERE id = {jobId}", ct);
         }

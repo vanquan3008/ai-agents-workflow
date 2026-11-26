@@ -8,8 +8,8 @@ using Microsoft.Extensions.Options;
 namespace DevAgent.Infrastructure.Ai;
 
 /// <summary>
-/// Adapter cho Claude qua SDK chính thức của Anthropic. Chỉ lớp này biết SDK; Application dùng <see cref="IModelClient"/>.
-/// API key nằm trong client, không bao giờ đi vào prompt hay log.
+/// Claude adapter built on the official Anthropic SDK. Only this class knows the SDK; the application uses <see cref="IModelClient"/>.
+/// The API key stays inside the client and never reaches prompts or logs.
 /// </summary>
 internal sealed class AnthropicModelClient : IModelClient, IDisposable
 {
@@ -49,7 +49,7 @@ internal sealed class AnthropicModelClient : IModelClient, IDisposable
 
         if (_options.Anthropic.EnableServerSideFallback)
         {
-            // Khi bị từ chối (refusal), server tự định tuyến sang model dự phòng phù hợp trong cùng lần gọi.
+            // On a refusal the server reroutes to a suitable fallback model within the same call.
             parameters = parameters with
             {
                 Betas = [AnthropicBeta.ServerSideFallback2026_07_01],
@@ -80,7 +80,7 @@ internal sealed class AnthropicModelClient : IModelClient, IDisposable
     {
         ModelRole.User => new BetaUserMessageParam { Content = message.Content },
         ModelRole.Assistant => new BetaAssistantMessageParam { Content = message.Content },
-        _ => throw new ArgumentOutOfRangeException(nameof(message), message.Role, "Vai trò không hỗ trợ."),
+        _ => throw new ArgumentOutOfRangeException(nameof(message), message.Role, "Unsupported message role."),
     };
 
     private static Effort ParseEffort(string effort) => effort switch

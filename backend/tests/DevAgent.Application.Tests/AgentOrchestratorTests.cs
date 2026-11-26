@@ -1,10 +1,11 @@
 using System.Text.Json;
 using DevAgent.Application.Abstractions.Ai;
+using DevAgent.Application.AgentRuntime.Budget;
+using DevAgent.Application.AgentRuntime.Orchestration;
+using DevAgent.Application.AgentRuntime.Planner;
+using DevAgent.Application.AgentRuntime.Steps;
 using DevAgent.Application.Common;
 using DevAgent.Application.Features.Approvals;
-using DevAgent.Application.Orchestration;
-using DevAgent.Application.Orchestration.Agents;
-using DevAgent.Application.Orchestration.Steps;
 using DevAgent.Application.Tests.Fakes;
 using DevAgent.Domain.Approvals;
 using DevAgent.Domain.Common;
@@ -154,7 +155,7 @@ public sealed class AgentOrchestratorTests
         spent.RecordModelCall(new TokenUsage(1, 1, 0, _fx.Limits.MaxCostUsdPerTask));
         _fx.Store.Executions.Add(spent);
 
-        // Ngân sách chỉ có ý nghĩa với model có giá; giả lập model tính phí.
+        // Budgets only matter for priced models, so fake a paid model.
         orchestrator = Orchestrator(model = new ScriptedModelClient(Plan("src/a.cs")) { Price = _ => new ModelPrice(4m, 20m, 0.2m) });
         await orchestrator.AdvanceAsync(task.Id, "w1", CancellationToken.None);
 

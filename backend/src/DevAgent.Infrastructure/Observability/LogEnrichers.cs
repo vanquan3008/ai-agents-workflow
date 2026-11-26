@@ -6,9 +6,9 @@ using Serilog.Events;
 namespace DevAgent.Infrastructure.Observability;
 
 /// <summary>
-/// Che dữ liệu nhạy cảm trước khi ghi log (checklist 1.5, kịch bản nghiệm thu "log không chứa token"):
-/// - thuộc tính có tên giống secret (token, password, apiKey, authorization...) bị thay bằng "***";
-/// - giá trị chuỗi khớp định dạng token phổ biến (GitHub, Anthropic, Bearer, Bot, JWT) bị che.
+/// Redacts sensitive data before it is logged:
+/// - properties whose names look like secrets (token, password, apiKey, authorization...) become "***";
+/// - string values matching common token formats (GitHub, Anthropic, Bearer, Bot, JWT) are masked.
 /// </summary>
 internal sealed partial class SensitiveDataMaskingEnricher : ILogEventEnricher
 {
@@ -61,7 +61,7 @@ internal sealed partial class SensitiveDataMaskingEnricher : ILogEventEnricher
     private static partial Regex SensitiveValue();
 }
 
-/// <summary>Gắn TraceId/SpanId vào mọi dòng log để nối log với trace OpenTelemetry.</summary>
+/// <summary>Adds TraceId/SpanId to every log event to correlate logs with OpenTelemetry traces.</summary>
 internal sealed class TraceContextEnricher : ILogEventEnricher
 {
     public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)

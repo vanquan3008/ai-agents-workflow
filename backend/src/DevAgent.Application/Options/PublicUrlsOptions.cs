@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DevAgent.Application.Options;
 
-/// <summary>URL công khai để dựng liên kết trong thông báo Discord/PR (màn hình duyệt, chi tiết task).</summary>
+/// <summary>Public dashboard URL used to build links in chat notifications and pull requests.</summary>
 public sealed class PublicUrlsOptions
 {
     public const string SectionName = "PublicUrls";

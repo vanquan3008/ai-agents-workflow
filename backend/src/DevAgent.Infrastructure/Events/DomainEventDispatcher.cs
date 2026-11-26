@@ -8,9 +8,9 @@ using Microsoft.Extensions.Logging;
 namespace DevAgent.Infrastructure.Events;
 
 /// <summary>
-/// Phát domain event tới handler trong cùng scope:
-/// - <see cref="ITransactionalDomainEventHandler{TEvent}"/> trước commit; lỗi làm hỏng cả giao dịch (outbox).
-/// - <see cref="IDomainEventHandler{TEvent}"/> sau commit; lỗi chỉ được log vì dữ liệu đã lưu là nguồn sự thật.
+/// Dispatches domain events to handlers in the current scope:
+/// - <see cref="ITransactionalDomainEventHandler{TEvent}"/> before commit; a failure aborts the transaction (outbox).
+/// - <see cref="IDomainEventHandler{TEvent}"/> after commit; failures are only logged because saved data is the source of truth.
 /// </summary>
 internal sealed partial class DomainEventDispatcher(IServiceProvider services, ILogger<DomainEventDispatcher> logger)
 {
@@ -57,7 +57,7 @@ internal sealed partial class DomainEventDispatcher(IServiceProvider services, I
             {
                 await handler.HandleAsync(domainEvent, cancellationToken);
             }
-#pragma warning disable CA1031 // Handler sau commit không được làm hỏng use case đã thành công.
+#pragma warning disable CA1031 // An after-commit handler must never fail a use case that already succeeded.
             catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
             {
@@ -66,6 +66,6 @@ internal sealed partial class DomainEventDispatcher(IServiceProvider services, I
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Domain event handler {Handler} lỗi khi xử lý {EventType}")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "Domain event handler {Handler} failed while handling {EventType}")]
     private static partial void LogHandlerFailed(ILogger logger, Exception exception, string eventType, string handler);
 }

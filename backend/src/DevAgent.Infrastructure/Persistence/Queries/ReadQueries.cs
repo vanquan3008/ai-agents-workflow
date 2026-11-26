@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DevAgent.Infrastructure.Persistence.Queries;
 
-/// <summary>Phía đọc (CQRS-lite): truy vấn không theo dõi thay đổi, trả DTO trực tiếp.</summary>
+/// <summary>Read side (CQRS-lite): no-tracking queries projected straight into DTOs.</summary>
 internal sealed class ProjectQueries(DevAgentDbContext context) : IProjectQueries
 {
     public Task<IReadOnlyList<ProjectDto>> ListForUserAsync(UserId userId, CancellationToken cancellationToken) =>

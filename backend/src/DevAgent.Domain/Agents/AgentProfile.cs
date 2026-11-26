@@ -4,8 +4,8 @@ using DevAgent.Domain.Executions;
 namespace DevAgent.Domain.Agents;
 
 /// <summary>
-/// Cấu hình agent (AgentProfile): vai trò, model, công cụ được phép, trần đầu ra.
-/// Khác với AgentInstance (tiến trình đang chạy) và AgentExecution (một lần chạy).
+/// Agent configuration: role, model, allowed tools and output cap.
+/// Distinct from <see cref="AgentInstance"/> (a running process) and AgentExecution (a single run).
 /// </summary>
 public sealed class AgentProfile : AggregateRoot<AgentProfileId>
 {
@@ -30,7 +30,7 @@ public sealed class AgentProfile : AggregateRoot<AgentProfileId>
 
     public AgentStep Role { get; private set; }
 
-    /// <summary>Khóa model logic; adapter nhà cung cấp AI ánh xạ sang model id thật qua cấu hình.</summary>
+    /// <summary>Logical model key; the AI provider adapter maps it to a concrete model id through configuration.</summary>
     public string Model { get; private set; }
 
     public List<string> AllowedTools { get; private set; }

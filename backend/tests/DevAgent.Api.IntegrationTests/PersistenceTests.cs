@@ -1,8 +1,10 @@
 using DevAgent.Application.Abstractions.Persistence;
 using DevAgent.Domain.Common;
 using DevAgent.Domain.Executions;
+using DevAgent.Domain.Executions.Repositories;
 using DevAgent.Domain.Policies;
 using DevAgent.Domain.Tasks;
+using DevAgent.Domain.Tasks.Repositories;
 using DevAgent.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +12,7 @@ using Shouldly;
 
 namespace DevAgent.Api.IntegrationTests;
 
-/// <summary>Aggregate được lưu/tải lại đúng qua EF Core + PostgreSQL thật (owned collection, value object, xmin).</summary>
+/// <summary>Aggregates round-trip through EF Core and real PostgreSQL (owned collections, value objects, xmin).</summary>
 public sealed class PersistenceTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     private const string Sha = "0123456789abcdef0123456789abcdef01234567";
@@ -36,7 +38,7 @@ public sealed class PersistenceTests(ApiFactory factory) : IClassFixture<ApiFact
             taskId = task.Id;
         }
 
-        // Mỗi bước dùng scope mới, giống Worker xử lý từng job.
+        // Each step uses a fresh scope, like the worker processing individual jobs.
         await Mutate(t => t.StartPlanning(Sha, "devagent/task-x", Domain.Workflows.WorkflowDefinition.Default, 0, Actor.System, now));
         await Mutate(t =>
         {

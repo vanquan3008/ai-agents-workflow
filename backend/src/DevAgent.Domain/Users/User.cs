@@ -3,48 +3,10 @@ using DevAgent.Domain.Common;
 
 namespace DevAgent.Domain.Users;
 
-public enum IdentityProvider
-{
-    Oidc = 1,
-    GitHub = 2,
-    Discord = 3,
-}
-
-/// <summary>Vai trò cấp hệ thống. Quyền theo project vẫn tính từ <see cref="Projects.ProjectMember"/>.</summary>
-public enum SystemRole
-{
-    User = 1,
-
-    /// <summary>Quản trị nền tảng: toàn quyền trên mọi project, tạo project, quản lý người dùng.</summary>
-    SuperAdmin = 2,
-}
-
-/// <summary>Danh tính bên ngoài (Discord/GitHub/OIDC) được liên kết với một người dùng DevAgent.</summary>
-public sealed class ExternalIdentity
-{
-    private ExternalIdentity()
-    {
-        ExternalId = string.Empty;
-    }
-
-    internal ExternalIdentity(IdentityProvider provider, string externalId, DateTimeOffset linkedAt)
-    {
-        Provider = provider;
-        ExternalId = externalId;
-        LinkedAt = linkedAt;
-    }
-
-    public IdentityProvider Provider { get; private set; }
-
-    public string ExternalId { get; private set; }
-
-    public DateTimeOffset LinkedAt { get; private set; }
-}
-
 /// <summary>
-/// Người dùng DevAgent đăng nhập bằng email + mật khẩu. Domain không biết thuật toán băm: chỉ giữ chuỗi băm
-/// do tầng Application tạo. <see cref="SecurityStamp"/> đổi mỗi khi thông tin bảo mật đổi (mật khẩu, vai trò,
-/// khóa tài khoản), làm mọi access token cũ mất hiệu lực.
+/// A DevAgent user signing in with email and password. The domain never hashes: it only stores the hash
+/// produced by the application layer. <see cref="SecurityStamp"/> rotates whenever security-relevant data
+/// changes (password, role, activation), which invalidates every previously issued access token.
 /// </summary>
 public sealed partial class User : AggregateRoot<UserId>
 {
@@ -75,10 +37,10 @@ public sealed partial class User : AggregateRoot<UserId>
 
     public bool IsSuperAdmin => SystemRole == SystemRole.SuperAdmin;
 
-    /// <summary>Chuỗi băm mật khẩu (định dạng do <c>IPasswordHasher</c> quyết định). Null = chưa đặt mật khẩu.</summary>
+    /// <summary>Password hash in the format chosen by <c>IPasswordHasher</c>; null until a password is set.</summary>
     public string? PasswordHash { get; private set; }
 
-    /// <summary>Bắt đổi mật khẩu ở lần đăng nhập tới (mật khẩu tạm do quản trị đặt hoặc seed).</summary>
+    /// <summary>Forces a password change on next sign-in (temporary password set by an admin or seed).</summary>
     public bool MustChangePassword { get; private set; }
 
     public string SecurityStamp { get; private set; }
@@ -106,7 +68,7 @@ public sealed partial class User : AggregateRoot<UserId>
             Enum.IsDefined(role) ? role : throw new DomainException("user.role_invalid", "Vai trò hệ thống không hợp lệ."),
             Guard.Utc(now, "created_at"));
 
-    /// <summary>Chuẩn hóa email để so khớp đăng nhập không phân biệt hoa thường.</summary>
+    /// <summary>Lower-cases and validates an email so sign-in matching is case-insensitive.</summary>
     public static string NormalizeEmail(string email)
     {
         var value = Guard.NotEmpty(email, "email", 320).ToLowerInvariant();
@@ -124,10 +86,10 @@ public sealed partial class User : AggregateRoot<UserId>
         SecurityStamp = NewStamp();
     }
 
-    /// <summary>Đổi chuỗi băm sang tham số mạnh hơn mà không đổi mật khẩu (không làm mất phiên đăng nhập).</summary>
+    /// <summary>Re-hashes with stronger parameters without changing the password, so sessions stay valid.</summary>
     public void UpgradePasswordHash(string passwordHash) => PasswordHash = Guard.NotEmpty(passwordHash, "password_hash", 500);
 
-    /// <summary>Ghi nhận đăng nhập sai; đủ số lần thì khóa tạm thời.</summary>
+    /// <summary>Counts a failed sign-in and locks the account temporarily once the limit is reached.</summary>
     public void RecordFailedLogin(DateTimeOffset now, int maxAttempts, TimeSpan lockoutDuration)
     {
         FailedLoginCount++;

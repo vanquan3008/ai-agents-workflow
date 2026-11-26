@@ -12,8 +12,8 @@ using Microsoft.Extensions.Options;
 namespace DevAgent.Infrastructure.Persistence;
 
 /// <summary>
-/// Áp migration (nếu bật) và bảo đảm hệ thống có Super Admin khi khởi động. Chạy trong StartAsync
-/// nên ứng dụng chỉ nhận request sau khi DB sẵn sàng.
+/// Applies migrations (when enabled) and ensures a super admin exists. Runs in StartAsync so the app only
+/// serves requests once the database is ready.
 /// </summary>
 internal sealed partial class DatabaseInitializer(
     IServiceProvider services,
@@ -35,14 +35,14 @@ internal sealed partial class DatabaseInitializer(
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Đang áp migration cơ sở dữ liệu")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Applying database migrations")]
     private static partial void LogMigrating(ILogger logger);
 }
 
 /// <summary>
-/// Seed duy nhất: tài khoản Super Admin đầu tiên, lấy từ cấu hình <c>Bootstrap:SuperAdmin</c> (secret qua biến môi trường).
-/// Chỉ chạy khi hệ thống chưa có Super Admin nào. Mật khẩu seed là mật khẩu tạm: bắt buộc đổi ở lần đăng nhập đầu.
-/// Không seed project, repo hay người dùng mẫu.
+/// The only seed: the first super admin from <c>Bootstrap:SuperAdmin</c> (secrets via environment variables).
+/// Runs only while no super admin exists. The seeded password is temporary and must be changed on first sign-in.
+/// No sample projects, repositories or users are created.
 /// </summary>
 public sealed partial class SuperAdminSeeder(
     DevAgentDbContext context,
@@ -76,7 +76,7 @@ public sealed partial class SuperAdminSeeder(
         var existing = await context.Users.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
         if (existing is not null)
         {
-            // Tài khoản đã có (vd tạo trước đó): nâng quyền thay vì tạo trùng email.
+            // The account already exists: promote it instead of creating a duplicate email.
             existing.ChangeRole(SystemRole.SuperAdmin);
             existing.Activate();
         }
@@ -91,9 +91,9 @@ public sealed partial class SuperAdminSeeder(
         LogSeeded(logger, email);
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Đã tạo Super Admin {Email}; bắt buộc đổi mật khẩu ở lần đăng nhập đầu")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Seeded super admin {Email}; password change required on first sign-in")]
     private static partial void LogSeeded(ILogger logger, string email);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Chưa có Super Admin và chưa cấu hình Bootstrap:SuperAdmin:Email/Password; không ai đăng nhập được để quản trị")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No super admin exists and Bootstrap:SuperAdmin:Email/Password is not configured; nobody can sign in to administer the system")]
     private static partial void LogMissingBootstrap(ILogger logger);
 }

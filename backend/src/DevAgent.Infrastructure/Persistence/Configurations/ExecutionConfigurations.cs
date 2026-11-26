@@ -133,12 +133,12 @@ internal sealed class JobRecordConfiguration : IEntityTypeConfiguration<JobRecor
 
         builder.HasIndex(j => j.DeduplicationKey).IsUnique();
 
-        // Chỉ mục riêng phần cho truy vấn nhận việc: nhỏ và nóng.
+        // Small, hot partial indexes for the lease query.
         builder.HasIndex(j => j.AvailableAt).HasFilter("status = 'Queued'").HasDatabaseName("ix_jobs_queued_available_at");
         builder.HasIndex(j => j.LeasedUntil).HasFilter("status = 'Leased'").HasDatabaseName("ix_jobs_leased_until");
         builder.HasIndex(j => new { j.Status, j.UpdatedAt });
 
-        // Quét dead-letter chưa đối soát.
+        // Sweep for unreconciled dead letters.
         builder.HasIndex(j => j.DeadLetteredAt).HasFilter("status = 'DeadLetter' AND reconciled_at IS NULL").HasDatabaseName("ix_jobs_unreconciled_dead_letters");
     }
 }

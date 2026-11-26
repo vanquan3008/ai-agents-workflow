@@ -1,35 +1,8 @@
 namespace DevAgent.Domain.Policies;
 
-public enum PolicyOutcome
-{
-    /// <summary>Nằm trọn trong phạm vi tự động, không chạm vùng nhạy cảm.</summary>
-    AutoApproved = 1,
-
-    /// <summary>Chạm vùng nhạy cảm, nằm ngoài phạm vi tự động hoặc vượt giới hạn: cần người có quyền duyệt.</summary>
-    RequiresApproval = 2,
-
-    /// <summary>Không phân loại được (đường dẫn không hợp lệ, không có thay đổi): dừng để người phụ trách xem xét.</summary>
-    NeedsReview = 3,
-}
-
-public enum ChangeKind
-{
-    Create = 1,
-    Modify = 2,
-    Delete = 3,
-    Rename = 4,
-}
-
-public sealed record ProposedChange(string Path, ChangeKind Kind);
-
-public sealed record PolicyDecision(PolicyOutcome Outcome, SensitiveArea Areas, int PolicyVersion, IReadOnlyList<string> Reasons)
-{
-    public bool CanProceedAutomatically => Outcome == PolicyOutcome.AutoApproved;
-}
-
 /// <summary>
-/// Domain service áp chính sách repo lên tập thay đổi dự kiến (kế hoạch) hoặc thực tế (diff).
-/// Được gọi lại trước mỗi thao tác ghi và trước khi push (checklist 2A, 2C).
+/// Domain service that applies a repository policy to proposed (plan) or actual (diff) changes.
+/// Re-evaluated before every write and before every push.
 /// </summary>
 public static class ChangePolicyEvaluator
 {

@@ -1,13 +1,14 @@
 using DevAgent.Application;
 using DevAgent.Application.Abstractions.Security;
-using DevAgent.Application.Orchestration;
+using DevAgent.Application.AgentRuntime.Jobs;
 using DevAgent.Infrastructure;
 using DevAgent.Infrastructure.Observability;
-using DevAgent.Worker;
+using DevAgent.Worker.Hosting;
+using DevAgent.Worker.Jobs;
 using Serilog;
 
-// Logger tạm chỉ để ghi lỗi khởi động; logger chính được cấu hình trong AddDevAgentObservability.
-// Không dùng CreateBootstrapLogger: logger reloadable chỉ "đóng băng" được một lần mỗi tiến trình (hỏng khi test chạy nhiều host).
+// Temporary logger for startup failures only; the real logger is configured by AddDevAgentObservability.
+// CreateBootstrapLogger is avoided because a reloadable logger can be frozen only once per process, which breaks multi-host tests.
 Log.Logger = new LoggerConfiguration().WriteTo.Console(formatProvider: System.Globalization.CultureInfo.InvariantCulture).CreateLogger();
 
 try
@@ -17,7 +18,7 @@ try
     builder.AddDevAgentObservability("devagent-worker");
 
     builder.Services.AddApplication();
-    builder.Services.AddAgentOrchestration();
+    builder.Services.AddWorkerJobHandlers();
     builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 
     builder.Services.AddOptions<WorkerOptions>()
@@ -40,7 +41,7 @@ try
 }
 catch (Exception ex) when (ex is not HostAbortedException)
 {
-    Log.Fatal(ex, "Worker dừng do lỗi khởi động");
+    Log.Fatal(ex, "Worker stopped because of a startup failure");
     throw;
 }
 finally

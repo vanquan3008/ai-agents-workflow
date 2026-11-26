@@ -1,8 +1,8 @@
 import { createBrowserRouter } from 'react-router'
+import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
-import { EmptyBlock } from '@/shared/ui/page'
-import { AppShell } from './AppShell'
 import { GuestOnly, RequireAuth, RequireSuperAdmin } from './guards'
+import { NotFoundPage } from './NotFoundPage'
 
 const page = (loader: () => Promise<{ default: React.ComponentType }>) => async () => ({ Component: (await loader()).default })
 
@@ -70,7 +70,7 @@ export const router = createBrowserRouter([
           }
         },
       },
-      { path: '*', element: <EmptyBlock title="Không tìm thấy trang" description="Đường dẫn không tồn tại hoặc đã bị đổi." /> },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ])

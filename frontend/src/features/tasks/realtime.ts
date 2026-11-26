@@ -4,8 +4,8 @@ import { taskHub } from '@/shared/realtime/taskHub'
 import { taskKeys } from './api'
 
 /**
- * Nhận cập nhật realtime cho một task. Mỗi sự kiện chỉ là tín hiệu: dữ liệu luôn đọc lại từ API,
- * nên sau khi mất kết nối, timeline được khôi phục đầy đủ và đúng thứ tự từ lịch sử đã lưu.
+ * Live updates for one task. Events are only refresh hints: data is always re-read from the API, so after a
+ * reconnect the timeline is restored completely and in order from persisted history.
  */
 export function useTaskRealtime(taskId: string) {
   const queryClient = useQueryClient()
@@ -22,7 +22,7 @@ export function useTaskRealtime(taskId: string) {
     })
     const offReconnect = taskHub.onReconnected(refresh)
     taskHub.subscribeTask(taskId).catch(() => {
-      // Không kết nối được realtime: màn hình vẫn dùng dữ liệu API (tự làm mới định kỳ).
+      // Realtime unavailable: the screen keeps using API data with periodic refetching.
     })
 
     return () => {

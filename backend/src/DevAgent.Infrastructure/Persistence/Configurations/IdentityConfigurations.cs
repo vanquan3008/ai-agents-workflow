@@ -23,7 +23,7 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.SecurityStamp).HasMaxLength(64).IsRequired();
         builder.Ignore(u => u.IsSuperAdmin);
 
-        // Email (đã chuẩn hóa chữ thường) là định danh đăng nhập: duy nhất.
+        // The normalized (lower-case) email is the sign-in identifier.
         builder.HasIndex(u => u.Email).IsUnique();
         builder.HasIndex(u => new { u.SystemRole, u.IsActive });
         builder.HasXminConcurrencyToken();
@@ -36,7 +36,7 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
             identity.Property(i => i.Provider).ValueGeneratedNever();
             identity.Property(i => i.ExternalId).HasMaxLength(200).IsRequired();
 
-            // Một tài khoản Discord/GitHub chỉ liên kết với một người dùng DevAgent.
+            // A Discord/GitHub account links to at most one DevAgent user.
             identity.HasIndex(i => new { i.Provider, i.ExternalId }).IsUnique();
         });
         builder.Navigation(u => u.Identities).UsePropertyAccessMode(PropertyAccessMode.Field);
@@ -62,7 +62,7 @@ internal sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
             member.HasKey("ProjectId", nameof(ProjectMember.UserId));
             member.Property(m => m.UserId).ValueGeneratedNever();
 
-            // Phục vụ truy vấn "các project của tôi" và kiểm tra quyền.
+            // Serves "my projects" queries and permission checks.
             member.HasIndex(m => m.UserId);
         });
         builder.Navigation(p => p.Members).UsePropertyAccessMode(PropertyAccessMode.Field);
@@ -88,7 +88,7 @@ internal sealed class CodeRepositoryConfiguration : IEntityTypeConfiguration<Cod
         builder.HasOne<Project>().WithMany().HasForeignKey(r => r.ProjectId).OnDelete(DeleteBehavior.Restrict);
         builder.HasXminConcurrencyToken();
 
-        // Chính sách là value object bất biến có phiên bản: lưu nguyên khối dạng jsonb.
+        // The policy is an immutable, versioned value object stored as a single jsonb document.
         builder.Property(r => r.Policy)
             .HasColumnType("jsonb")
             .HasConversion(
@@ -140,7 +140,7 @@ internal sealed class WorkflowRevisionConfiguration : IEntityTypeConfiguration<W
         builder.HasOne<CodeRepository>().WithMany().HasForeignKey(r => r.RepositoryId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<User>().WithMany().HasForeignKey(r => r.ChangedBy).OnDelete(DeleteBehavior.Restrict);
 
-        // Mỗi phiên bản của một repo chỉ có một bản ghi; cũng là chỉ mục đọc lịch sử mới nhất trước.
+        // One row per repository version; also serves newest-first history reads.
         builder.HasIndex(r => new { r.RepositoryId, r.Version }).IsUnique();
         builder.Ignore(r => r.DomainEvents);
     }

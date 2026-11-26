@@ -7,8 +7,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DevAgent.Infrastructure.Persistence.Converters;
 
 /// <summary>
-/// Lưu <see cref="WorkflowDefinition"/> dạng jsonb. Dùng snapshot riêng (enum dạng chuỗi) để đổi cấu trúc domain
-/// không làm hỏng dữ liệu cũ; trường thiếu trong JSON cũ lấy giá trị mặc định.
+/// Stores <see cref="WorkflowDefinition"/> as jsonb through a dedicated snapshot (string enums) so domain refactors never
+/// break stored data; fields missing from older JSON fall back to defaults.
 /// </summary>
 internal static class WorkflowJson
 {
@@ -23,7 +23,7 @@ internal static class WorkflowJson
 
     public static ValueConverter<WorkflowDefinition, string> Converter { get; } = new(d => Serialize(d), s => Deserialize(s));
 
-    // EF không gọi converter với null (cột NULL ánh xạ trực tiếp sang null), nên chỉ khác ở chú thích nullability.
+    // EF never passes null to a converter (NULL columns map straight to null), so this differs only in nullability annotations.
     public static ValueConverter<WorkflowDefinition?, string> NullableConverter { get; } = new(d => Serialize(d!), s => Deserialize(s));
 
     public static ValueComparer<WorkflowDefinition?> NullableComparer { get; } = new(
@@ -52,7 +52,7 @@ internal static class WorkflowJson
 
         public bool PrDraft { get; init; }
 
-        // Mặc định trùng WorkflowDefinition.Default để JSON thiếu trường (hoặc "{}") đọc ra quy trình mặc định.
+        // Defaults mirror WorkflowDefinition.Default so incomplete JSON (or "{}") reads as the default workflow.
         public string[] PrLabels { get; init; } = ["devagent"];
 
         public string PrTitlePrefix { get; init; } = "[DevAgent]";

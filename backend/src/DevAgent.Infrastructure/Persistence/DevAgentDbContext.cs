@@ -15,8 +15,8 @@ using Microsoft.EntityFrameworkCore;
 namespace DevAgent.Infrastructure.Persistence;
 
 /// <summary>
-/// DbContext duy nhất của modular monolith. Mỗi module sở hữu bảng của mình qua file cấu hình riêng
-/// trong thư mục Configurations; module khác chỉ tham chiếu bằng ID, không điều hướng chéo aggregate.
+/// The single DbContext of the modular monolith. Each module owns its tables through its own configuration class;
+/// other modules reference them by id only, never through cross-aggregate navigations.
 /// </summary>
 public sealed class DevAgentDbContext(DbContextOptions<DevAgentDbContext> options) : DbContext(options)
 {
@@ -70,7 +70,7 @@ public sealed class DevAgentDbContext(DbContextOptions<DevAgentDbContext> option
         configurationBuilder.Properties<RefreshTokenId>().HaveConversion<RefreshTokenIdConverter>();
         configurationBuilder.Properties<SystemRole>().HaveConversion<string>().HaveMaxLength(20);
 
-        // Enum lưu dạng chuỗi: đọc được khi truy vấn tay và an toàn khi thêm giá trị mới.
+        // Enums are stored as strings: readable in ad-hoc queries and safe when values are added.
         configurationBuilder.Properties<AgentTaskStatus>().HaveConversion<string>().HaveMaxLength(40);
         configurationBuilder.Properties<TaskChannel>().HaveConversion<string>().HaveMaxLength(40);
         configurationBuilder.Properties<AgentStep>().HaveConversion<string>().HaveMaxLength(40);

@@ -2,18 +2,9 @@ using DevAgent.Domain.Common;
 
 namespace DevAgent.Domain.Executions;
 
-public enum ToolExecutionStatus
-{
-    Running = 1,
-    Succeeded = 2,
-    Failed = 3,
-    Denied = 4,
-}
-
 /// <summary>
-/// Một lần agent gọi công cụ (đọc/sửa file, chạy build/test...). Lưu đầu vào, đầu ra có cấu trúc,
-/// mã thoát và lý do từ chối nếu chính sách chặn. Đầu vào/đầu ra phải được che dữ liệu nhạy cảm
-/// trước khi gán vào đây.
+/// One tool invocation by an agent (read/edit files, build, test...). Stores structured input/output, exit code
+/// and the denial reason when a policy blocked it. Input and output must be redacted before they reach this entity.
 /// </summary>
 public sealed class ToolExecution : Entity<ToolExecutionId>
 {

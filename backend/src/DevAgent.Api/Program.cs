@@ -10,8 +10,8 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Serilog;
 
-// Logger tạm chỉ để ghi lỗi khởi động; logger chính được cấu hình trong AddDevAgentObservability.
-// Không dùng CreateBootstrapLogger: logger reloadable chỉ "đóng băng" được một lần mỗi tiến trình (hỏng khi test chạy nhiều host).
+// Temporary logger for startup failures only; the real logger is configured by AddDevAgentObservability.
+// CreateBootstrapLogger is avoided because a reloadable logger can be frozen only once per process, which breaks multi-host tests.
 Log.Logger = new LoggerConfiguration().WriteTo.Console(formatProvider: System.Globalization.CultureInfo.InvariantCulture).CreateLogger();
 
 try
@@ -65,7 +65,7 @@ try
     app.UseAuthorization();
     app.UseRateLimiter();
 
-    // Liveness: tiến trình còn sống. Readiness: kết nối được PostgreSQL.
+    // Liveness: the process is up. Readiness: PostgreSQL is reachable.
     app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
     app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") }).AllowAnonymous();
 
@@ -85,7 +85,7 @@ try
 }
 catch (Exception ex) when (ex is not HostAbortedException)
 {
-    Log.Fatal(ex, "API dừng do lỗi khởi động");
+    Log.Fatal(ex, "API stopped because of a startup failure");
     throw;
 }
 finally
@@ -93,5 +93,5 @@ finally
     await Log.CloseAndFlushAsync();
 }
 
-/// <summary>Mở cho WebApplicationFactory trong integration test.</summary>
+/// <summary>Exposed for WebApplicationFactory in integration tests.</summary>
 public partial class Program;

@@ -6,8 +6,8 @@ using DevAgent.Application.Common;
 namespace DevAgent.Infrastructure.Integrations;
 
 /// <summary>
-/// GitHub chưa sẵn sàng (Mode = Disabled, hoặc Mode = App khi adapter GitHub App chưa được triển khai ở Phase 2A).
-/// Báo lỗi rõ ràng để Orchestrator chặn task với lý do, thay vì giả vờ thành công.
+/// GitHub is unavailable (Mode = Disabled, or Mode = App before the GitHub App adapter exists).
+/// Fails loudly so the orchestrator blocks the task with a reason instead of pretending to succeed.
 /// </summary>
 internal sealed class UnavailableSourceControlGateway(string reason) : ISourceControlGateway
 {
@@ -25,8 +25,8 @@ internal sealed class UnavailableSourceControlGateway(string reason) : ISourceCo
 }
 
 /// <summary>
-/// GitHub giả lập xác định cho Development/Testing: SHA suy ra từ tên repo/nhánh, danh sách file cố định,
-/// PR lưu trong bộ nhớ (đủ để kiểm thử nhánh phục hồi "tìm PR theo nhánh").
+/// Deterministic GitHub stand-in for Development/Testing: SHAs derive from repository and branch, the file list is fixed
+/// and PRs live in memory (enough to exercise the "find PR by branch" recovery path).
 /// </summary>
 internal sealed class FakeSourceControlGateway : ISourceControlGateway
 {

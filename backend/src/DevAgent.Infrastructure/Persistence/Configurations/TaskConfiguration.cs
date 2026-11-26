@@ -46,13 +46,13 @@ internal sealed class TaskConfiguration : IEntityTypeConfiguration<AgentTask>
             transition.WithOwner().HasForeignKey("TaskId");
             transition.HasKey("TaskId", nameof(TaskStatusTransition.Sequence));
 
-            // Khóa do domain gán. Mặc định EF coi phần khóa không phải FK của owned collection là giá trị DB sinh,
-            // dẫn tới UPDATE thay vì INSERT cho bản ghi mới.
+            // The domain assigns this key. By default EF treats the non-FK part of an owned collection key as
+            // database-generated, which would turn inserts of new rows into updates.
             transition.Property(x => x.Sequence).ValueGeneratedNever();
             transition.Property(x => x.ActorId).HasMaxLength(200).IsRequired();
             transition.Property(x => x.Reason).HasMaxLength(4000);
 
-            // Timeline đọc theo thời gian trên toàn hệ thống (dashboard vận hành).
+            // System-wide chronological timeline reads.
             transition.HasIndex(x => x.OccurredAt);
         });
         builder.Navigation(t => t.Transitions).UsePropertyAccessMode(PropertyAccessMode.Field);
@@ -68,7 +68,6 @@ internal sealed class TaskConfiguration : IEntityTypeConfiguration<AgentTask>
         });
         builder.Navigation(t => t.Plans).UsePropertyAccessMode(PropertyAccessMode.Field);
 
-        // Ảnh chụp quy trình lúc bắt đầu lượt xử lý.
         builder.Property(t => t.Workflow).HasColumnType("jsonb").HasConversion(WorkflowJson.NullableConverter, WorkflowJson.NullableComparer);
         builder.Ignore(t => t.EffectiveWorkflow);
         builder.Ignore(t => t.CurrentPlanningStartedAt);
@@ -80,10 +79,10 @@ internal sealed class TaskConfiguration : IEntityTypeConfiguration<AgentTask>
         builder.HasOne<CodeRepository>().WithMany().HasForeignKey(t => t.RepositoryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(t => t.RequestedBy).OnDelete(DeleteBehavior.Restrict);
 
-        // Chống trùng: cùng project + idempotency key chỉ có một task (checklist 0.3, nghiệm thu Phase 1).
+        // Deduplication: one task per (project, idempotency key).
         builder.HasIndex(t => new { t.ProjectId, t.IdempotencyKey }).IsUnique();
 
-        // Danh sách task theo project/trạng thái mới nhất trước, và quét task theo trạng thái.
+        // Newest-first task lists per project/status, and status sweeps.
         builder.HasIndex(t => new { t.ProjectId, t.Status, t.CreatedAt }).IsDescending(false, false, true);
         builder.HasIndex(t => new { t.Status, t.UpdatedAt });
         builder.HasIndex(t => t.RepositoryId);

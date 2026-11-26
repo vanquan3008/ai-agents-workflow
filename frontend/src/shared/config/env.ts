@@ -1,11 +1,11 @@
 import { z } from 'zod'
 
 /**
- * Cấu hình dashboard, gộp từ hai nguồn (nguồn sau ghi đè nguồn trước):
- *  1. Biến VITE_* lúc build (mặc định cho `npm run dev`).
- *  2. Cấu hình runtime `window.__DEVAGENT_CONFIG__` từ `/config.js`, do container sinh lúc khởi động từ biến môi trường.
- * Nhờ (2), một image dashboard dùng được cho mọi môi trường mà không phải build lại.
- * Không đặt secret ở đây: mọi giá trị đều tới được trình duyệt.
+ * Dashboard configuration merged from two sources (later wins):
+ *  1. Build-time VITE_* variables (defaults for `npm run dev`).
+ *  2. Runtime `window.__DEVAGENT_CONFIG__` from `/config.js`, rendered by the container from environment variables.
+ * Source 2 lets one dashboard image serve every environment without rebuilding.
+ * Never put secrets here: every value reaches the browser.
  */
 export interface RuntimeConfig {
   ENVIRONMENT?: string
@@ -54,11 +54,11 @@ export const envResult = resolveEnv(
   import.meta.env.PROD,
 )
 
-/** Cấu hình đã kiểm tra. main.tsx chỉ render ứng dụng khi cấu hình hợp lệ, nên các module khác dùng trực tiếp. */
+/** Validated configuration. main.tsx renders the app only when it is valid, so other modules may use it directly. */
 export const env: AppEnv = envResult.ok
   ? envResult.env
   : new Proxy({} as AppEnv, {
       get: () => {
-        throw new Error(`Cấu hình môi trường không hợp lệ:\n${envResult.error}`)
+        throw new Error(`Invalid environment configuration:\n${envResult.error}`)
       },
     })

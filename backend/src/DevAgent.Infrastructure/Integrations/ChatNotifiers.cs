@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 
 namespace DevAgent.Infrastructure.Integrations;
 
-/// <summary>Discord tắt: chỉ ghi log thông báo (không chứa secret).</summary>
+/// <summary>Used when Discord is disabled: logs the notification (never secrets).</summary>
 internal sealed partial class LoggingChatNotifier(ILogger<LoggingChatNotifier> logger) : IChatNotifier
 {
     public Task NotifyAsync(ChatNotification notification, CancellationToken cancellationToken)
@@ -22,15 +22,15 @@ internal sealed partial class LoggingChatNotifier(ILogger<LoggingChatNotifier> l
         return Task.CompletedTask;
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "[chat:disabled] {Kind} cho task {TaskId} ({Link})")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "[chat:disabled] {Kind} for task {TaskId} ({Link})")]
     private static partial void LogNotification(ILogger logger, ChatNotificationKind kind, Guid taskId, string? link);
 }
 
 /// <summary>
-/// Gửi thông báo vào kênh Discord qua REST API (bot token). Nhận lệnh slash command thuộc Phase 2D.
-/// - Chống gửi trùng khi job chạy lại: <c>nonce</c> suy ra từ khóa thông báo + <c>enforce_nonce</c>.
-/// - Giới hạn tần suất (429): ném <see cref="RetryableJobException"/> kèm <c>Retry-After</c> để hàng đợi chờ đúng thời gian.
-/// - 5xx, timeout, lỗi mạng: thử lại. 401/403/404 (token/kênh sai): lỗi vĩnh viễn, chuyển dead-letter.
+/// Posts notifications to a Discord channel through the REST API (bot token).
+/// - Retried jobs never double-post: <c>nonce</c> is derived from the deduplication key with <c>enforce_nonce</c>.
+/// - Rate limits (429) throw <see cref="RetryableJobException"/> carrying <c>Retry-After</c> so the queue waits exactly that long.
+/// - 5xx, timeouts and network errors are retried; 401/403/404 (bad token or channel) are permanent and dead-lettered.
 /// </summary>
 internal sealed partial class DiscordChatNotifier(HttpClient http, IOptions<DiscordOptions> options, ILogger<DiscordChatNotifier> logger)
     : IChatNotifier
@@ -113,7 +113,7 @@ internal sealed partial class DiscordChatNotifier(HttpClient http, IOptions<Disc
         return content.Length > MaxContentLength ? content[..MaxContentLength] : content;
     }
 
-    /// <summary>Discord giới hạn nonce 25 ký tự: dùng băm ổn định của khóa thông báo.</summary>
+    /// <summary>Discord caps nonces at 25 characters, so a stable hash of the deduplication key is used.</summary>
     internal static string Nonce(string deduplicationKey) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(deduplicationKey)))[..25];
 
@@ -140,12 +140,12 @@ internal sealed partial class DiscordChatNotifier(HttpClient http, IOptions<Disc
         }
         catch (JsonException)
         {
-            // Thân phản hồi không phải JSON: dùng mặc định.
+            // Non-JSON body: fall back to the default delay.
         }
 
         return TimeSpan.FromSeconds(5);
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Discord trả về {StatusCode} khi gửi thông báo cho task {TaskId}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Discord returned {StatusCode} for the notification of task {TaskId}")]
     private static partial void LogSendFailed(ILogger logger, int statusCode, Guid taskId);
 }

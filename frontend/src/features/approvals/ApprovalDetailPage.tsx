@@ -1,15 +1,21 @@
-import { useState } from 'react'
+import { AlertTriangle, FileText, Info, Lock } from 'lucide-react'
 import { Link, useParams } from 'react-router'
-import { useApproval, useDecideApproval } from './api'
-import { useTask } from '@/features/tasks/api'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useProject } from '@/features/projects/api'
+import { useTask } from '@/features/tasks/api'
+import { PlanDetails } from '@/features/tasks/components/PlanDetails'
 import { formatDateTime } from '@/shared/lib/format'
-import { ErrorBlock, FormError, LoadingBlock, PageHeader } from '@/shared/ui/page'
-import { StatusBadge } from '@/shared/ui/status-badge'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { sensitiveAreaLabel } from '@/shared/lib/labels'
+import { DescriptionList } from '@/shared/ui/description-list'
+import { PageHeader } from '@/shared/ui/page-header'
+import { Panel } from '@/shared/ui/panel'
+import { RelativeTime } from '@/shared/ui/relative-time'
+import { ErrorBlock, LoadingBlock } from '@/shared/ui/states'
+import { ApprovalStatusBadge } from './components/ApprovalStatusBadge'
+import { useApproval } from './api'
+import { ApprovalDecisionPanel } from './components/ApprovalDecisionPanel'
 
 export default function ApprovalDetailPage() {
   const { approvalId = '' } = useParams()
@@ -17,89 +23,92 @@ export default function ApprovalDetailPage() {
   const task = useTask(query.data?.taskId ?? '')
   const project = useProject(query.data?.projectId ?? '')
   const { isSuperAdmin } = useAuth()
-  const decide = useDecideApproval(approvalId)
-  const [comment, setComment] = useState('')
-  if (query.isPending) return <LoadingBlock />
+
+  if (query.isPending) return <LoadingBlock rows={6} />
   if (query.isError) return <ErrorBlock error={query.error} onRetry={() => void query.refetch()} />
+
   const approval = query.data
-  const canDecide = isSuperAdmin || project.data?.myRole === 'OWNER' || project.data?.myRole === 'APPROVER'
+  const myRole = project.data?.myRole
+  const canDecide = isSuperAdmin || myRole === 'OWNER' || myRole === 'APPROVER'
   const isCurrentPlan = approval.kind === 'PLAN' && approval.planVersion === task.data?.currentPlan?.version
-  const pending = approval.status === 'PENDING' && Date.parse(approval.expiresAt) > query.dataUpdatedAt
+  const isOpen = approval.status === 'PENDING' && Date.parse(approval.expiresAt) > query.dataUpdatedAt
+  const reasons = approval.scope.split('\n').filter(Boolean)
+
   return (
-    <article className="max-w-3xl space-y-6">
+    <article>
       <PageHeader
+        backTo={{ to: '/approvals', label: 'Tất cả yêu cầu duyệt' }}
+        eyebrow={<ApprovalStatusBadge status={approval.status} />}
         title={approval.taskTitle}
-        description={approval.scope}
+        description={approval.kind === 'PLAN' ? `Duyệt kế hoạch v${approval.planVersion} trước khi agent sửa code.` : 'Duyệt diff trước khi xuất bản pull request.'}
         actions={
-          <Link className="underline" to={`/tasks/${approval.taskId}`}>
-            Xem task
-          </Link>
+          <Button asChild variant="outline">
+            <Link to={`/tasks/${approval.taskId}`}>Mở task</Link>
+          </Button>
         }
       />
-      <StatusBadge status={approval.status} />
-      <p className="text-sm text-muted-foreground">
-        Hết hạn {formatDateTime(approval.expiresAt)} · Chính sách v{approval.policyVersion}
-      </p>
-      {task.isPending && <LoadingBlock />}
-      {task.isError && <ErrorBlock error={task.error} />}
-      {project.isError && <ErrorBlock error={project.error} />}
-      {isCurrentPlan && task.data?.currentPlan && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Kế hoạch v{approval.planVersion}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p>{task.data.currentPlan.summary}</p>
-            <ol className="list-decimal pl-5">
-              {task.data.currentPlan.steps.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-            <h3 className="font-medium">Tiêu chí nghiệm thu</h3>
-            <ul className="list-disc pl-5">
-              {task.data.currentPlan.acceptanceCriteria.map((item) => (
-                <li key={item}>{item}</li>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="min-w-0 space-y-4">
+          <Panel title="Vì sao cần duyệt" icon={<AlertTriangle />}>
+            {approval.sensitiveAreas.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {approval.sensitiveAreas.map((area) => (
+                  <Badge key={area} variant="outline" className="border-warning/40 text-warning rounded-md">
+                    {sensitiveAreaLabel(area)}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <ul className="space-y-1.5 text-sm">
+              {reasons.map((reason) => (
+                <li key={reason} className="text-muted-foreground break-words">
+                  • {reason}
+                </li>
               ))}
             </ul>
-            <h3 className="font-medium">File dự kiến sửa</h3>
-            <ul className="font-mono text-sm">
-              {task.data.currentPlan.affectedPaths.map((path) => (
-                <li key={path}>{path}</li>
-              ))}
-            </ul>
-            <ul>
-              {task.data.currentPlan.risks.map((risk) => (
-                <li key={risk}>{risk}</li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-      {approval.kind === 'PLAN' && task.data && !isCurrentPlan && (
-        <p role="alert">Kế hoạch hiện tại đã thay đổi. Mở task để kiểm tra yêu cầu duyệt mới.</p>
-      )}
-      {approval.commitSha && <p className="break-all font-mono">{approval.commitSha}</p>}
-      {approval.comment && <p className="whitespace-pre-wrap">{approval.comment}</p>}
-      {pending && canDecide && isCurrentPlan && (
-        <div className="space-y-3">
-          <label htmlFor="approval-comment">Nhận xét, bắt buộc khi từ chối</label>
-          <Textarea id="approval-comment" value={comment} onChange={(event) => setComment(event.target.value)} maxLength={2000} />
-          <FormError error={decide.error} />
-          <div className="flex gap-3">
-            <Button disabled={decide.isPending} onClick={() => decide.mutate({ decision: 'approve', comment })}>
-              Duyệt kế hoạch này
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={decide.isPending || !comment.trim()}
-              onClick={() => decide.mutate({ decision: 'reject', comment: comment.trim() })}
-            >
-              Từ chối
-            </Button>
-          </div>
+          </Panel>
+
+          {task.isPending && <LoadingBlock rows={4} />}
+          {task.isError && <ErrorBlock error={task.error} onRetry={() => void task.refetch()} />}
+          {approval.kind === 'PLAN' && task.data && !isCurrentPlan && (
+            <Panel className="border-warning/40 bg-warning/[0.04]">
+              <p className="text-sm" role="alert">
+                Kế hoạch của task đã thay đổi sau yêu cầu này. Mở task để xem yêu cầu duyệt mới.
+              </p>
+            </Panel>
+          )}
+          {isCurrentPlan && task.data?.currentPlan && (
+            <Panel title={`Kế hoạch v${approval.planVersion}`} icon={<FileText />}>
+              <PlanDetails plan={task.data.currentPlan} showPolicy={false} />
+            </Panel>
+          )}
         </div>
-      )}
-      {pending && !canDecide && <p className="text-sm text-muted-foreground">Cần quyền Approver hoặc Owner để quyết định.</p>}
+
+        <aside className="min-w-0 space-y-4 lg:sticky lg:top-16 lg:self-start">
+          {isOpen && canDecide && isCurrentPlan && <ApprovalDecisionPanel approvalId={approval.id} planVersion={approval.planVersion} />}
+          {isOpen && !canDecide && project.data && (
+            <Panel>
+              <p className="text-muted-foreground flex items-start gap-2 text-sm">
+                <Lock className="mt-0.5 size-4 shrink-0" /> Cần quyền Approver hoặc Owner của project để quyết định.
+              </p>
+            </Panel>
+          )}
+          <Panel title="Chi tiết" icon={<Info />}>
+            <DescriptionList
+              items={[
+                { label: 'Loại', value: approval.kind === 'PLAN' ? 'Kế hoạch' : 'Diff' },
+                ...(approval.commitSha ? [{ label: 'Commit', value: approval.commitSha, mono: true }] : []),
+                { label: 'Chính sách', value: `v${approval.policyVersion}` },
+                { label: 'Yêu cầu lúc', value: formatDateTime(approval.requestedAt) },
+                { label: 'Hết hạn', value: <RelativeTime value={approval.expiresAt} /> },
+                ...(approval.decidedAt ? [{ label: 'Quyết định lúc', value: formatDateTime(approval.decidedAt) }] : []),
+                ...(approval.comment ? [{ label: 'Nhận xét', value: <span className="whitespace-pre-wrap">{approval.comment}</span> }] : []),
+              ]}
+            />
+          </Panel>
+        </aside>
+      </div>
     </article>
   )
 }

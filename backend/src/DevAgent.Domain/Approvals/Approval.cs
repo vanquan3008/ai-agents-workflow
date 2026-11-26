@@ -3,33 +3,10 @@ using DevAgent.Domain.Policies;
 
 namespace DevAgent.Domain.Approvals;
 
-public enum ApprovalKind
-{
-    /// <summary>Duyệt kế hoạch trước khi thực hiện thay đổi nhạy cảm.</summary>
-    Plan = 1,
-
-    /// <summary>Duyệt diff thực tế (gắn với commit) trước khi xuất bản PR.</summary>
-    Diff = 2,
-}
-
-public enum ApprovalStatus
-{
-    Pending = 1,
-    Approved = 2,
-    Rejected = 3,
-    Expired = 4,
-    Superseded = 5,
-}
-
-public sealed record ApprovalDecided(ApprovalId ApprovalId, TaskId TaskId, ApprovalStatus Status, UserId DecidedBy, DateTimeOffset OccurredAt)
-    : IDomainEvent;
-
-public sealed record ApprovalRequested(ApprovalId ApprovalId, TaskId TaskId, ApprovalKind Kind, DateTimeOffset OccurredAt) : IDomainEvent;
-
 /// <summary>
-/// Yêu cầu duyệt. Quyết định gắn với người duyệt, thời điểm, phạm vi và đúng đối tượng:
-/// phiên bản kế hoạch (Plan) hoặc commit SHA (Diff). Nếu bản sửa đổi, yêu cầu cũ bị Superseded.
-/// Domain đảm bảo người duyệt là con người; kiểm tra quyền Approver do tầng Application thực hiện.
+/// A request for human approval. The decision is bound to the approver, the time, the scope and the exact subject:
+/// a plan version (<see cref="ApprovalKind.Plan"/>) or a commit SHA (<see cref="ApprovalKind.Diff"/>). When the
+/// subject changes the old request is superseded. Approver permissions are checked by the application layer.
 /// </summary>
 public sealed class Approval : AggregateRoot<ApprovalId>
 {
@@ -75,7 +52,7 @@ public sealed class Approval : AggregateRoot<ApprovalId>
 
     public int PolicyVersion { get; private set; }
 
-    /// <summary>Mô tả phạm vi được duyệt (lý do chính sách yêu cầu duyệt).</summary>
+    /// <summary>The policy reasons that made approval necessary.</summary>
     public string Scope { get; private set; }
 
     public ApprovalStatus Status { get; private set; }
@@ -122,7 +99,7 @@ public sealed class Approval : AggregateRoot<ApprovalId>
         }
     }
 
-    /// <summary>Bản sửa đã thay đổi sau khi xin duyệt: yêu cầu cũ không còn hiệu lực.</summary>
+    /// <summary>The subject changed after approval was requested, so this request no longer applies.</summary>
     public void Supersede(DateTimeOffset now)
     {
         if (Status is ApprovalStatus.Pending or ApprovalStatus.Approved)
@@ -132,7 +109,6 @@ public sealed class Approval : AggregateRoot<ApprovalId>
         }
     }
 
-    /// <summary>Phê duyệt có hiệu lực cho đúng đối tượng hay không.</summary>
     public bool IsValidFor(int? planVersion, string? commitSha) =>
         Status == ApprovalStatus.Approved
         && (Kind != ApprovalKind.Plan || PlanVersion == planVersion)

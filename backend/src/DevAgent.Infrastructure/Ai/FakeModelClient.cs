@@ -6,8 +6,8 @@ using Microsoft.Extensions.Options;
 namespace DevAgent.Infrastructure.Ai;
 
 /// <summary>
-/// Nhà cung cấp AI giả lập, kết quả cố định theo đầu vào (checklist 1.5: CI dùng dữ liệu xác định).
-/// Không gọi mạng, không tốn chi phí. Bị validator chặn ở Production.
+/// Deterministic AI provider for development and CI: output depends only on input, no network, no cost.
+/// Rejected by the options validator in Production.
 /// </summary>
 internal sealed class FakeModelClient(IOptions<AiOptions> options) : IModelClient
 {
@@ -32,7 +32,7 @@ internal sealed class FakeModelClient(IOptions<AiOptions> options) : IModelClien
 
     public string ResolveModel(string purpose) => $"fake-{options.Value.ModelFor(purpose)}";
 
-    /// <summary>Giả lập không tốn chi phí; trần token và số lần gọi vẫn được áp dụng.</summary>
+    /// <summary>Free, but token and call limits still apply.</summary>
     public ModelPrice? GetPrice(string model) => ModelPrice.Free;
 
     public Task<ModelResponse> CompleteAsync(ModelRequest request, CancellationToken cancellationToken)
@@ -55,7 +55,7 @@ internal sealed class FakeModelClient(IOptions<AiOptions> options) : IModelClien
 
     private static string PlannerResponse(string input)
     {
-        // Quy ước cho test: mô tả chứa "[clarify]" thì Planner hỏi lại; chứa "[sensitive]" thì kế hoạch chạm vùng nhạy cảm.
+        // Test convention: "[clarify]" makes the Planner ask a question; "[sensitive]" makes the plan touch a sensitive area.
         if (input.Contains("[clarify]", StringComparison.OrdinalIgnoreCase))
         {
             return JsonSerializer.Serialize(new
