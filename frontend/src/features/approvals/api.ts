@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiRequest } from '../../shared/api/http'
-import type { Approval, ApprovalStatus, PagedResult } from '../../shared/api/types'
-import { taskKeys } from '../tasks/api'
+import { taskKeys } from '@/features/tasks/api'
+import { apiRequest } from '@/shared/api/http'
+import type { Approval, ApprovalStatus, PagedResult } from '@/shared/api/types'
 
 export const approvalKeys = {
   all: ['approvals'] as const,
@@ -17,8 +17,12 @@ export const approvalsApi = {
   reject: (id: string, comment: string) => apiRequest<Approval>(`/approvals/${id}/reject`, { method: 'POST', body: { comment } }),
 }
 
-export function useApprovals(status: ApprovalStatus | '', page: number) {
-  return useQuery({ queryKey: approvalKeys.list(status, page), queryFn: ({ signal }) => approvalsApi.list(status, page, signal) })
+export function useApprovals(status: ApprovalStatus | '', page = 1) {
+  return useQuery({
+    queryKey: approvalKeys.list(status, page),
+    queryFn: ({ signal }) => approvalsApi.list(status, page, signal),
+    refetchInterval: 20_000,
+  })
 }
 
 export function useApproval(id: string) {

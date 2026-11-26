@@ -1,69 +1,70 @@
-import { Link, useSearchParams } from 'react-router'
-import type { ApprovalStatus } from '../../shared/api/types'
-import { formatDateTime, statusLabel } from '../../shared/lib/format'
-import { Empty, ErrorState, Loading } from '../../shared/ui/States'
-import { StatusBadge } from '../../shared/ui/StatusBadge'
+import { useState } from 'react'
+import { Link } from 'react-router'
 import { useApprovals } from './api'
+import type { ApprovalStatus } from '@/shared/api/types'
+import { formatDateTime, statusLabel } from '@/shared/lib/format'
+import { ErrorBlock, EmptyBlock, LoadingBlock, PageHeader } from '@/shared/ui/page'
+import { Pagination } from '@/shared/ui/pagination'
+import { StatusBadge } from '@/shared/ui/status-badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-const STATUSES: ApprovalStatus[] = ['PENDING', 'APPROVED', 'REJECTED', 'EXPIRED', 'SUPERSEDED']
-
-export function ApprovalsPage() {
-  const [params, setParams] = useSearchParams()
-  const status = (params.get('status') ?? 'PENDING') as ApprovalStatus | ''
-  const page = Number(params.get('page') ?? '1')
-  const approvals = useApprovals(status, page)
-
+export default function ApprovalsPage() {
+  const [status, setStatus] = useState<ApprovalStatus | ''>('PENDING')
+  const [page, setPage] = useState(1)
+  const query = useApprovals(status, page)
   return (
-    <section className="stack" aria-labelledby="approvals-heading">
-      <header className="page-header">
-        <h1 id="approvals-heading">Phê duyệt</h1>
-        <label className="visually-hidden" htmlFor="approval-status">
-          Trạng thái
-        </label>
-        <select id="approval-status" value={status} onChange={(e) => setParams({ status: e.target.value })}>
+    <section className="space-y-4">
+      <PageHeader title="Phê duyệt" />
+      <label className="flex items-center gap-3 text-sm">
+        Trạng thái
+        <select
+          className="h-9 rounded-md border bg-background px-3"
+          value={status}
+          onChange={(event) => {
+            setStatus(event.target.value as ApprovalStatus | '')
+            setPage(1)
+          }}
+        >
           <option value="">Tất cả</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {statusLabel(s)}
+          {(['PENDING', 'APPROVED', 'REJECTED', 'EXPIRED', 'SUPERSEDED'] as const).map((value) => (
+            <option value={value} key={value}>
+              {statusLabel(value)}
             </option>
           ))}
         </select>
-      </header>
-
-      {approvals.isPending ? (
-        <Loading />
-      ) : approvals.isError ? (
-        <ErrorState error={approvals.error} onRetry={() => void approvals.refetch()} />
-      ) : approvals.data.items.length === 0 ? (
-        <Empty title="Không có yêu cầu duyệt nào." />
-      ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th scope="col">Task</th>
-              <th scope="col">Loại</th>
-              <th scope="col">Vùng nhạy cảm</th>
-              <th scope="col">Trạng thái</th>
-              <th scope="col">Hết hạn</th>
-            </tr>
-          </thead>
-          <tbody>
-            {approvals.data.items.map((a) => (
-              <tr key={a.id}>
-                <td>
-                  <Link to={`/approvals/${a.id}`}>{a.taskTitle}</Link>
-                </td>
-                <td>{a.kind === 'PLAN' ? `Kế hoạch v${a.planVersion}` : `Diff ${a.commitSha?.slice(0, 7)}`}</td>
-                <td>{a.sensitiveAreas.join(', ') || 'Ngoài phạm vi tự động'}</td>
-                <td>
-                  <StatusBadge status={a.status} />
-                </td>
-                <td>{formatDateTime(a.expiresAt)}</td>
-              </tr>
+      </label>
+      {query.isPending && <LoadingBlock />}
+      {query.isError && <ErrorBlock error={query.error} onRetry={() => void query.refetch()} />}
+      {query.data?.items.length === 0 && <EmptyBlock title="Không có yêu cầu duyệt" />}
+      {query.data && query.data.items.length > 0 && (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Task</TableHead>
+              <TableHead>Nội dung</TableHead>
+              <TableHead>Trạng thái</TableHead>
+              <TableHead>Hết hạn</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {query.data.items.map((approval) => (
+              <TableRow key={approval.id}>
+                <TableCell>
+                  <Link className="font-medium hover:underline" to={`/approvals/${approval.id}`}>
+                    {approval.taskTitle}
+                  </Link>
+                </TableCell>
+                <TableCell>{approval.kind === 'PLAN' ? `Kế hoạch v${approval.planVersion}` : 'Diff'}</TableCell>
+                <TableCell>
+                  <StatusBadge status={approval.status} />
+                </TableCell>
+                <TableCell>{formatDateTime(approval.expiresAt)}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
+      {query.data && <Pagination page={page} totalPages={query.data.totalPages} pending={query.isFetching} onPage={setPage} />}
     </section>
   )
 }

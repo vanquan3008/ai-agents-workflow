@@ -1,4 +1,5 @@
-import { env } from '../config/env'
+import { session } from '@/features/auth/session'
+import { env } from '@/shared/config/env'
 
 /** Lỗi API theo ProblemDetails (RFC 9457) mà backend trả về, kèm mã ổn định `code`. */
 export class ApiError extends Error {
@@ -23,33 +24,29 @@ export class ApiError extends Error {
   get isNotFound() {
     return this.status === 404
   }
+
+  /** Lỗi đầu tiên của một trường (để hiện dưới ô nhập). */
+  field(name: string): string | undefined {
+    return this.errors[name]?.join(' ')
+  }
 }
 
 interface ProblemDetails {
   title?: string
   detail?: string
-  status?: number
   code?: string
   traceId?: string
   errors?: Record<string, string[]>
 }
 
-/** Header xác thực. Chế độ development gửi X-DevAgent-User; chế độ OIDC gắn bearer token (Phase 1.3). */
-export function authHeaders(): Record<string, string> {
-  if (env.authMode === 'development' && env.devUserId) {
-    return { 'X-DevAgent-User': env.devUserId }
-  }
-
-  const token = sessionStorage.getItem('devagent.access_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
 export interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   headers?: Record<string, string>
   signal?: AbortSignal
   query?: Record<string, string | number | boolean | null | undefined>
+  /** Bỏ qua cơ chế tự refresh (dùng cho chính endpoint xác thực). */
+  skipAuthRefresh?: boolean
 }
 
 function buildUrl(path: string, query?: RequestOptions['query']): string {
@@ -79,21 +76,45 @@ export async function parseProblem(response: Response): Promise<ApiError> {
   )
 }
 
-/** Gọi API dùng chung cho mọi tính năng: base URL, xác thực, JSON, và chuẩn hóa lỗi. */
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(buildUrl(path, options.query), {
+function send(path: string, options: RequestOptions): Promise<Response> {
+  const token = session.accessToken
+  return fetch(buildUrl(path, options.query), {
     method: options.method ?? 'GET',
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
+      'X-DevAgent-Client': 'web',
       ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      ...authHeaders(),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
   })
+}
 
-  if (!response.ok) throw await parseProblem(response)
+/**
+ * Gọi API dùng chung: base URL, bearer token, JSON và chuẩn hóa lỗi.
+ * Gặp 401 thì refresh phiên một lần rồi gửi lại; refresh thất bại thì phiên bị xóa và giao diện về trang đăng nhập.
+ */
+export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  let response = await send(path, options)
+  if (response.status === 401 && !options.skipAuthRefresh && (await session.refresh())) {
+    response = await send(path, options)
+  }
+
+  if (!response.ok) {
+    const error = await parseProblem(response)
+    if (error.code === 'auth.password_change_required' && session.current.status === 'authenticated') {
+      // Server yêu cầu đổi mật khẩu: đồng bộ cờ để route guard chuyển trang.
+      session.apply({
+        accessToken: session.current.accessToken,
+        expiresAt: new Date(session.current.expiresAt).toISOString(),
+        user: { ...session.current.user, mustChangePassword: true },
+      })
+    }
+    throw error
+  }
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }

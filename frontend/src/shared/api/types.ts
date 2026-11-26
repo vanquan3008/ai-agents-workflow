@@ -48,11 +48,37 @@ export interface PagedResult<T> {
   hasNextPage: boolean
 }
 
+export type ProjectRole = 'VIEWER' | 'REQUESTER' | 'APPROVER' | 'OWNER'
+
 export interface Project {
   id: string
   name: string
   slug: string
-  myRole: 'VIEWER' | 'REQUESTER' | 'APPROVER' | 'OWNER'
+  /** Vai trò của người xem; Super Admin không là thành viên thì là SUPER_ADMIN. */
+  myRole: ProjectRole | 'SUPER_ADMIN'
+  memberCount: number
+  repositoryCount: number
+  createdAt: string
+}
+
+export interface ProjectMember {
+  userId: string
+  displayName: string
+  email: string
+  role: ProjectRole
+  addedAt: string
+}
+
+export interface AdminUser {
+  id: string
+  email: string
+  displayName: string
+  systemRole: 'USER' | 'SUPER_ADMIN'
+  isActive: boolean
+  mustChangePassword: boolean
+  lockedUntil: string | null
+  lastLoginAt: string | null
+  projectCount: number
   createdAt: string
 }
 
@@ -72,6 +98,7 @@ export interface Repository {
     testCommand: string
     maxChangedFiles: number
   }
+  workflowVersion: number
   isActive: boolean
   createdAt: string
 }
@@ -202,4 +229,56 @@ export interface TaskRealtimeEvent {
   status: string | null
   message: string | null
   occurredAt: string
+}
+
+// ---------- Quy trình (mức 2) ----------
+
+export type ApprovalRequirement = 'ON_SENSITIVE' | 'ALWAYS'
+export type FindingSeverity = 'LOW' | 'MEDIUM' | 'HIGH'
+export type NotificationEvent =
+  | 'TASK_ACCEPTED'
+  | 'APPROVAL_REQUIRED'
+  | 'CLARIFICATION_NEEDED'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'BLOCKED'
+  | 'CANCELLED'
+
+export interface WorkflowDefinition {
+  planApproval: ApprovalRequirement
+  diffApproval: ApprovalRequirement
+  plannerMaxAttempts: number
+  maxFixIterations: number
+  reviewerBlockingSeverity: FindingSeverity
+  requireRegressionTest: boolean
+  pullRequest: { draft: boolean; labels: string[]; titlePrefix: string; reviewers: string[] }
+  notifyOn: NotificationEvent[]
+  models: { planner: string | null; coding: string | null; reviewer: string | null }
+}
+
+export interface WorkflowLimits {
+  plannerMaxAttemptsCap: number
+  maxFixIterationsCap: number
+  approvalOptions: ApprovalRequirement[]
+  severityOptions: FindingSeverity[]
+  notificationOptions: NotificationEvent[]
+  mandatoryNotifications: NotificationEvent[]
+  invariants: string[]
+}
+
+export interface RepositoryWorkflow {
+  repositoryId: string
+  repositoryFullName: string
+  version: number
+  isDefault: boolean
+  definition: WorkflowDefinition
+  limits: WorkflowLimits
+}
+
+export interface WorkflowRevision {
+  version: number
+  changedBy: string
+  changedAt: string
+  comment: string | null
+  definition: WorkflowDefinition
 }

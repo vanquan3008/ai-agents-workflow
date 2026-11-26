@@ -1,4 +1,6 @@
 /// <reference types="vitest/config" />
+import path from 'node:path'
+import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 
@@ -9,7 +11,10 @@ export default defineConfig(({ mode }) => {
   const proxyTarget = env.DEV_PROXY_TARGET || 'http://localhost:5080'
 
   return {
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: { '@': path.resolve(import.meta.dirname, './src') },
+    },
     server: {
       port: Number(env.DEV_SERVER_PORT || 5173),
       strictPort: true,
@@ -29,10 +34,6 @@ export default defineConfig(({ mode }) => {
       globals: false,
       setupFiles: ['./src/test/setup.ts'],
       css: false,
-      env: {
-        VITE_AUTH_MODE: 'development',
-        VITE_DEV_USER_ID: '0193a1c0-0000-7000-8000-000000000001',
-      },
     },
   }
 })

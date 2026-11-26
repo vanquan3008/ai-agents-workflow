@@ -1,37 +1,38 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, apiRequest, newIdempotencyKey } from './http'
+import { afterEach, expect, it, vi } from 'vitest'
+import { apiRequest, ApiError } from './http'
+import { session, type SessionResponse } from '@/features/auth/session'
 
-describe('apiRequest', () => {
-  afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  session.clear()
+  vi.unstubAllGlobals()
+})
 
-  it('gửi header xác thực development và dựng query string', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+it('refresh một lần khi nhận 401 rồi gửi lại yêu cầu với token mới', async () => {
+  const updated: SessionResponse = {
+    accessToken: 'new-token',
+    expiresAt: new Date(Date.now() + 900_000).toISOString(),
+    user: { id: 'u', displayName: 'User', email: 'u@example.test', systemRole: 'USER', mustChangePassword: false },
+  }
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(null, { status: 401 }))
+    .mockResolvedValueOnce(Response.json(updated))
+    .mockResolvedValueOnce(Response.json({ id: 'task' }))
+  vi.stubGlobal('fetch', fetch)
+  await expect(apiRequest('/tasks/task')).resolves.toEqual({ id: 'task' })
+  expect(fetch).toHaveBeenCalledTimes(3)
+  expect(fetch.mock.calls[2]?.[1]?.headers.Authorization).toBe('Bearer new-token')
+})
 
-    await apiRequest('/tasks', { query: { status: 'PENDING', page: 2, search: '' } })
+it('lỗi 403 giữ nguyên thông tin và không refresh phiên', async () => {
+  const fetch = vi.fn().mockResolvedValue(Response.json({ code: 'forbidden', detail: 'Không có quyền.' }, { status: 403 }))
+  vi.stubGlobal('fetch', fetch)
+  await expect(apiRequest('/projects')).rejects.toMatchObject({ code: 'forbidden', status: 403 })
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
 
-    const [url, init] = fetchMock.mock.calls[0]!
-    expect(url).toBe('/api/v1/tasks?status=PENDING&page=2')
-    expect((init!.headers as Record<string, string>)['X-DevAgent-User']).toBe('0193a1c0-0000-7000-8000-000000000001')
-  })
-
-  it('chuyển ProblemDetails thành ApiError có mã ổn định', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ status: 403, title: 'Không có quyền', detail: 'Bạn không có quyền.', code: 'auth.forbidden' }), {
-        status: 403,
-      }),
-    )
-
-    const error = await apiRequest('/tasks/x').catch((e: unknown) => e)
-
-    expect(error).toBeInstanceOf(ApiError)
-    expect((error as ApiError).code).toBe('auth.forbidden')
-    expect((error as ApiError).isForbidden).toBe(true)
-  })
-
-  it('sinh idempotency key duy nhất, hợp lệ với backend', () => {
-    const a = newIdempotencyKey()
-    const b = newIdempotencyKey()
-    expect(a).not.toBe(b)
-    expect(a).toMatch(/^[A-Za-z0-9._:-]+$/)
-  })
+it('refresh bị từ chối trả lỗi 401 và xóa phiên', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 401 })))
+  await expect(apiRequest('/projects')).rejects.toBeInstanceOf(ApiError)
+  expect(session.current.status).toBe('anonymous')
 })

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { taskHub } from '../../shared/realtime/taskHub'
+import { taskHub } from '@/shared/realtime/taskHub'
 import { taskKeys } from './api'
 
 /**
@@ -22,7 +22,7 @@ export function useTaskRealtime(taskId: string) {
     })
     const offReconnect = taskHub.onReconnected(refresh)
     taskHub.subscribeTask(taskId).catch(() => {
-      // Không kết nối được realtime: màn hình vẫn dùng dữ liệu API (có thể làm mới thủ công).
+      // Không kết nối được realtime: màn hình vẫn dùng dữ liệu API (tự làm mới định kỳ).
     })
 
     return () => {

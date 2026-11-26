@@ -1,6 +1,7 @@
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr'
-import { env } from '../config/env'
-import type { TaskRealtimeEvent } from '../api/types'
+import { session } from '@/features/auth/session'
+import { env } from '@/shared/config/env'
+import type { TaskRealtimeEvent } from '@/shared/api/types'
 
 type Listener = (event: TaskRealtimeEvent) => void
 type ReconnectListener = () => void
@@ -18,10 +19,13 @@ class TaskHubClient {
   private readonly taskSubscriptions = new Map<string, number>()
 
   private build(): HubConnection {
-    const devUser = env.authMode === 'development' && env.devUserId ? `?dev_user=${env.devUserId}` : ''
     const connection = new HubConnectionBuilder()
-      .withUrl(`${env.hubUrl}${devUser}`, {
-        accessTokenFactory: () => sessionStorage.getItem('devagent.access_token') ?? '',
+      .withUrl(env.hubUrl, {
+        // Lấy token mới nhất mỗi lần (kết nối lại sau khi token được refresh).
+        accessTokenFactory: async () => {
+          if (!session.accessToken) await session.refresh()
+          return session.accessToken ?? ''
+        },
       })
       .withAutomaticReconnect([0, 2_000, 5_000, 10_000, 30_000])
       .configureLogging(import.meta.env.DEV ? LogLevel.Information : LogLevel.Warning)
@@ -60,6 +64,14 @@ class TaskHubClient {
   onEvent(listener: Listener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  async disconnect(): Promise<void> {
+    const connection = this.connection
+    this.connection = null
+    this.starting = null
+    this.taskSubscriptions.clear()
+    await connection?.stop()
   }
 
   onReconnected(listener: ReconnectListener): () => void {

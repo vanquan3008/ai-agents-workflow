@@ -25,7 +25,10 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+
+    /* Alias import (shadcn/ui) */
+    "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"]
 }

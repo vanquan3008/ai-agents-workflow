@@ -36,3 +36,25 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export const statusLabel = (status: string) => STATUS_LABELS[status] ?? status
+
+const relative = new Intl.RelativeTimeFormat('vi-VN', { numeric: 'auto' })
+
+/** "3 phút trước", "hôm qua"… cho cột cập nhật. */
+export function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const seconds = Math.round((new Date(iso).getTime() - Date.now()) / 1000)
+  const abs = Math.abs(seconds)
+  if (abs < 60) return relative.format(seconds, 'second')
+  if (abs < 3600) return relative.format(Math.round(seconds / 60), 'minute')
+  if (abs < 86_400) return relative.format(Math.round(seconds / 3600), 'hour')
+  return relative.format(Math.round(seconds / 86_400), 'day')
+}
+
+/** Chữ cái đầu cho avatar. */
+export const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(-2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('')
