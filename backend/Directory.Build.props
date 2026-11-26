@@ -1,0 +1,26 @@
+<Project>
+  <!-- Thiết lập chung cho mọi project backend. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Deterministic>true</Deterministic>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- CA1707: tên test dùng dấu gạch dưới; CA1711: tên domain như ProjectPermission; CA1716: từ khóa VB.NET; CA1848/CA1873: chấp nhận ILogger extension ở giai đoạn pilot. -->
+    <NoWarn>$(NoWarn);CA1707;CA1711;CA1716;CA1848;CA1873</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(ContinuousIntegrationBuild)' == 'true' OR '$(CI)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('Tests'))">
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

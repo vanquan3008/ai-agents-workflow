@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DevAgent.Api/DevAgent.Api.csproj" />
+    <Project Path="src/DevAgent.Application/DevAgent.Application.csproj" />
+    <Project Path="src/DevAgent.Domain/DevAgent.Domain.csproj" />
+    <Project Path="src/DevAgent.Infrastructure/DevAgent.Infrastructure.csproj" />
+    <Project Path="src/DevAgent.Worker/DevAgent.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DevAgent.Api.IntegrationTests/DevAgent.Api.IntegrationTests.csproj" />
+    <Project Path="tests/DevAgent.Application.Tests/DevAgent.Application.Tests.csproj" />
+    <Project Path="tests/DevAgent.ArchitectureTests/DevAgent.ArchitectureTests.csproj" />
+    <Project Path="tests/DevAgent.Domain.Tests/DevAgent.Domain.Tests.csproj" />
+  </Folder>
+</Solution>

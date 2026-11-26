@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Domain: không phụ thuộc EF, ASP.NET, GitHub, Discord hay SDK AI. -->
+  <PropertyGroup>
+    <RootNamespace>DevAgent.Domain</RootNamespace>
+  </PropertyGroup>
+</Project>
