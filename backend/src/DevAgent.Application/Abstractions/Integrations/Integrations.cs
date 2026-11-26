@@ -41,6 +41,7 @@ public enum ChatNotificationKind
     Cancelled = 7,
 }
 
+/// <param name="DeduplicationKey">Khóa ổn định của thông báo; kênh chat dùng để chống gửi trùng khi job chạy lại.</param>
 public sealed record ChatNotification(
     ChatNotificationKind Kind,
     Guid TaskId,
@@ -48,9 +49,13 @@ public sealed record ChatNotification(
     string Title,
     string Message,
     string? Link,
-    string? SourceReference);
+    string? SourceReference,
+    string DeduplicationKey);
 
-/// <summary>Gửi thông báo về kênh chat (Discord). Hiện thực phải chống gửi trùng theo (task, kind, sequence).</summary>
+/// <summary>
+/// Gửi thông báo về kênh chat (Discord). Hiện thực ném <see cref="Messaging.RetryableJobException"/> khi lỗi tạm thời
+/// (giới hạn tần suất, lỗi mạng, 5xx) và <see cref="Messaging.PermanentJobException"/> khi cấu hình sai (401/403/404).
+/// </summary>
 public interface IChatNotifier
 {
     Task NotifyAsync(ChatNotification notification, CancellationToken cancellationToken);

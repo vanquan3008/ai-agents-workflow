@@ -32,6 +32,9 @@ internal sealed class FakeModelClient(IOptions<AiOptions> options) : IModelClien
 
     public string ResolveModel(string purpose) => $"fake-{options.Value.ModelFor(purpose)}";
 
+    /// <summary>Giả lập không tốn chi phí; trần token và số lần gọi vẫn được áp dụng.</summary>
+    public ModelPrice? GetPrice(string model) => ModelPrice.Free;
+
     public Task<ModelResponse> CompleteAsync(ModelRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);

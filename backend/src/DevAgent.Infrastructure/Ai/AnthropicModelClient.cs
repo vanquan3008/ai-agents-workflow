@@ -30,6 +30,9 @@ internal sealed class AnthropicModelClient : IModelClient, IDisposable
 
     public string ResolveModel(string purpose) => _options.ModelFor(purpose);
 
+    public ModelPrice? GetPrice(string model) =>
+        _options.Pricing.TryGetValue(model, out var p) ? new ModelPrice(p.InputPerMillion, p.OutputPerMillion, p.CacheReadPerMillion) : null;
+
     public async Task<ModelResponse> CompleteAsync(ModelRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);

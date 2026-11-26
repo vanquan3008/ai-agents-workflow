@@ -2,6 +2,7 @@ using DevAgent.Domain.Projects;
 using DevAgent.Domain.Repositories;
 using DevAgent.Domain.Tasks;
 using DevAgent.Domain.Users;
+using DevAgent.Infrastructure.Persistence.Converters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -67,6 +68,10 @@ internal sealed class TaskConfiguration : IEntityTypeConfiguration<AgentTask>
         });
         builder.Navigation(t => t.Plans).UsePropertyAccessMode(PropertyAccessMode.Field);
 
+        // Ảnh chụp quy trình lúc bắt đầu lượt xử lý.
+        builder.Property(t => t.Workflow).HasColumnType("jsonb").HasConversion(WorkflowJson.NullableConverter, WorkflowJson.NullableComparer);
+        builder.Ignore(t => t.EffectiveWorkflow);
+        builder.Ignore(t => t.CurrentPlanningStartedAt);
         builder.Ignore(t => t.CurrentPlan);
         builder.Ignore(t => t.IsTerminal);
         builder.Ignore(t => t.DomainEvents);

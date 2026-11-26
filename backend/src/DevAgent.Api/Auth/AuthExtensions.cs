@@ -1,61 +1,100 @@
+using DevAgent.Application.Abstractions.Persistence;
 using DevAgent.Application.Abstractions.Security;
-using Microsoft.AspNetCore.Authentication;
+using DevAgent.Domain.Common;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 
 namespace DevAgent.Api.Auth;
 
 internal static class AuthExtensions
 {
-    public static IServiceCollection AddDevAgentAuth(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    public const string SuperAdminPolicy = "SuperAdmin";
+
+    public static IServiceCollection AddDevAgentAuth(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<AuthOptions>().Bind(configuration.GetSection(AuthOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
+        services.AddSingleton<IValidateOptions<AuthOptions>, AuthOptionsValidator>();
         services.AddHttpContextAccessor();
         services.AddScoped<HttpCurrentUser>();
         services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<HttpCurrentUser>());
+        services.AddSingleton<ITokenService, JwtTokenService>();
 
-        var auth = configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new();
-        if (auth.Development.Enabled)
-        {
-            if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<IOptions<AuthOptions>>((bearer, auth) =>
             {
-                throw new InvalidOperationException("Auth:Development:Enabled chỉ được bật ở môi trường Development hoặc Testing.");
-            }
-
-            services.AddAuthentication(DevelopmentAuthenticationHandler.SchemeName)
-                .AddScheme<AuthenticationSchemeOptions, DevelopmentAuthenticationHandler>(DevelopmentAuthenticationHandler.SchemeName, null);
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(auth.Jwt.Authority))
-            {
-                throw new InvalidOperationException("Auth:Jwt:Authority là bắt buộc khi không dùng xác thực Development.");
-            }
-
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
+                var jwt = auth.Value.Jwt;
+                bearer.MapInboundClaims = false;
+                bearer.TokenValidationParameters = new TokenValidationParameters
                 {
-                    options.Authority = auth.Jwt.Authority;
-                    options.Audience = auth.Jwt.Audience;
-                    options.RequireHttpsMetadata = auth.Jwt.RequireHttpsMetadata;
-                    options.MapInboundClaims = false;
-                    options.Events = new JwtBearerEvents
+                    ValidIssuer = jwt.Issuer,
+                    ValidAudience = jwt.Audience,
+                    IssuerSigningKey = JwtTokenService.SigningKey(jwt),
+                    ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ClockSkew = TimeSpan.FromSeconds(30),
+                    NameClaimType = JwtRegisteredClaimNames.Name,
+                    RoleClaimType = DevAgentClaims.Role,
+                };
+                bearer.Events = new JwtBearerEvents
+                {
+                    // WebSocket không gửi được header Authorization: SignalR truyền token qua query.
+                    OnMessageReceived = context =>
                     {
-                        // WebSocket không gửi được header Authorization: SignalR truyền token qua query.
-                        OnMessageReceived = context =>
+                        var token = context.Request.Query["access_token"];
+                        if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase))
                         {
-                            var token = context.Request.Query["access_token"];
-                            if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase))
-                            {
-                                context.Token = token;
-                            }
+                            context.Token = token;
+                        }
 
-                            return Task.CompletedTask;
-                        },
-                    };
-                });
-        }
+                        return Task.CompletedTask;
+                    },
 
-        services.AddAuthorization();
+                    // Token hợp lệ về chữ ký nhưng tài khoản đã bị khóa/đổi mật khẩu/đổi vai trò thì từ chối ngay.
+                    OnTokenValidated = async context =>
+                    {
+                        var sub = context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+                        var stamp = context.Principal?.FindFirst(DevAgentClaims.SecurityStamp)?.Value;
+                        if (!Guid.TryParse(sub, out var userId) || string.IsNullOrEmpty(stamp))
+                        {
+                            context.Fail("Token thiếu thông tin người dùng.");
+                            return;
+                        }
+
+                        var users = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
+                        var user = await users.GetByIdAsync(new UserId(userId), context.HttpContext.RequestAborted);
+                        if (user is not { IsActive: true } || user.SecurityStamp != stamp)
+                        {
+                            context.Fail("Phiên đăng nhập không còn hiệu lực.");
+                        }
+                    },
+                };
+            });
+
+        services.AddAuthorizationBuilder()
+            .AddPolicy(SuperAdminPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim(DevAgentClaims.Role, "SUPER_ADMIN"));
+
         return services;
     }
+
+    /// <summary>
+    /// Tài khoản đang dùng mật khẩu tạm chỉ được gọi các endpoint xác thực (xem, đổi mật khẩu, đăng xuất).
+    /// </summary>
+    public static RouteGroupBuilder RequirePasswordChanged(this RouteGroupBuilder group) =>
+        group.AddEndpointFilter(async (context, next) =>
+        {
+            var mustChange = context.HttpContext.User.FindFirst(DevAgentClaims.MustChangePassword)?.Value == "true";
+            return mustChange
+                ? Results.Problem(
+                    "Bạn cần đổi mật khẩu tạm trước khi tiếp tục.",
+                    statusCode: StatusCodes.Status403Forbidden,
+                    title: "Cần đổi mật khẩu",
+                    extensions: new Dictionary<string, object?> { ["code"] = "auth.password_change_required" })
+                : await next(context);
+        });
 }

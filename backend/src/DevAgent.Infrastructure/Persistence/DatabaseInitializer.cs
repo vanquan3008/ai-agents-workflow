@@ -1,9 +1,6 @@
-using DevAgent.Domain.Agents;
-using DevAgent.Domain.Common;
-using DevAgent.Domain.Executions;
-using DevAgent.Domain.Policies;
-using DevAgent.Domain.Projects;
-using DevAgent.Domain.Repositories;
+using DevAgent.Application.Abstractions.Security;
+using DevAgent.Application.Features.Auth;
+using DevAgent.Application.Options;
 using DevAgent.Domain.Users;
 using DevAgent.Infrastructure.Options;
 using Microsoft.EntityFrameworkCore;
@@ -14,36 +11,17 @@ using Microsoft.Extensions.Options;
 
 namespace DevAgent.Infrastructure.Persistence;
 
-/// <summary>Định danh cố định của dữ liệu mẫu môi trường phát triển (dùng cùng xác thực Development).</summary>
-public static class DevelopmentSeedData
-{
-    public static readonly UserId OwnerUserId = new(Guid.Parse("0193a1c0-0000-7000-8000-000000000001"));
-    public static readonly UserId ApproverUserId = new(Guid.Parse("0193a1c0-0000-7000-8000-000000000002"));
-    public static readonly UserId RequesterUserId = new(Guid.Parse("0193a1c0-0000-7000-8000-000000000003"));
-
-    /// <summary>Người dùng không thuộc project nào — dùng để kiểm thử từ chối truy cập.</summary>
-    public static readonly UserId OutsiderUserId = new(Guid.Parse("0193a1c0-0000-7000-8000-000000000004"));
-
-    public const string ProjectSlug = "pilot";
-}
-
 /// <summary>
-/// Áp migration và seed dữ liệu mẫu khi khởi động, theo cấu hình <see cref="DatabaseOptions"/>.
-/// Chạy trong StartAsync nên ứng dụng chỉ nhận request sau khi DB đã sẵn sàng.
+/// Áp migration (nếu bật) và bảo đảm hệ thống có Super Admin khi khởi động. Chạy trong StartAsync
+/// nên ứng dụng chỉ nhận request sau khi DB sẵn sàng.
 /// </summary>
 internal sealed partial class DatabaseInitializer(
     IServiceProvider services,
     IOptions<DatabaseOptions> options,
-    IHostEnvironment environment,
     ILogger<DatabaseInitializer> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!options.Value.ApplyMigrationsOnStartup && !options.Value.SeedDevelopmentData)
-        {
-            return;
-        }
-
         await using var scope = services.CreateAsyncScope();
 
         if (options.Value.ApplyMigrationsOnStartup)
@@ -52,10 +30,7 @@ internal sealed partial class DatabaseInitializer(
             await scope.ServiceProvider.GetRequiredService<DevAgentDbContext>().Database.MigrateAsync(cancellationToken);
         }
 
-        if (options.Value.SeedDevelopmentData && environment.IsDevelopment())
-        {
-            await ActivatorUtilities.CreateInstance<DevelopmentDataSeeder>(scope.ServiceProvider).SeedAsync(cancellationToken);
-        }
+        await ActivatorUtilities.CreateInstance<SuperAdminSeeder>(scope.ServiceProvider).SeedAsync(cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -64,47 +39,61 @@ internal sealed partial class DatabaseInitializer(
     private static partial void LogMigrating(ILogger logger);
 }
 
-/// <summary>Seed user/project/repo/agent profile mẫu. Idempotent: bỏ qua nếu project mẫu đã tồn tại.</summary>
-public sealed partial class DevelopmentDataSeeder(DevAgentDbContext context, TimeProvider clock, ILogger<DevelopmentDataSeeder> logger)
+/// <summary>
+/// Seed duy nhất: tài khoản Super Admin đầu tiên, lấy từ cấu hình <c>Bootstrap:SuperAdmin</c> (secret qua biến môi trường).
+/// Chỉ chạy khi hệ thống chưa có Super Admin nào. Mật khẩu seed là mật khẩu tạm: bắt buộc đổi ở lần đăng nhập đầu.
+/// Không seed project, repo hay người dùng mẫu.
+/// </summary>
+public sealed partial class SuperAdminSeeder(
+    DevAgentDbContext context,
+    IPasswordHasher hasher,
+    IOptions<BootstrapOptions> bootstrap,
+    IOptions<AuthPolicyOptions> policy,
+    TimeProvider clock,
+    ILogger<SuperAdminSeeder> logger)
 {
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
-        if (await context.Projects.AnyAsync(p => p.Slug == DevelopmentSeedData.ProjectSlug, cancellationToken))
+        if (await context.Users.AnyAsync(u => u.SystemRole == SystemRole.SuperAdmin, cancellationToken))
         {
             return;
         }
 
-        var now = clock.GetUtcNow();
-        var owner = User.Create(DevelopmentSeedData.OwnerUserId, "Dev Owner", "owner@devagent.local", now);
-        var approver = User.Create(DevelopmentSeedData.ApproverUserId, "Dev Approver", "approver@devagent.local", now);
-        var requester = User.Create(DevelopmentSeedData.RequesterUserId, "Dev Requester", "requester@devagent.local", now);
-        var outsider = User.Create(DevelopmentSeedData.OutsiderUserId, "Outsider", "outsider@devagent.local", now);
-        context.Users.AddRange(owner, approver, requester, outsider);
+        var admin = bootstrap.Value.SuperAdmin;
+        if (string.IsNullOrWhiteSpace(admin.Email) || string.IsNullOrWhiteSpace(admin.Password))
+        {
+            LogMissingBootstrap(logger);
+            return;
+        }
 
-        var project = Project.Create("Pilot", DevelopmentSeedData.ProjectSlug, owner.Id, now);
-        project.AddOrUpdateMember(approver.Id, ProjectRole.Approver, now);
-        project.AddOrUpdateMember(requester.Id, ProjectRole.Requester, now);
-        context.Projects.Add(project);
+        var email = User.NormalizeEmail(admin.Email);
+        var errors = PasswordPolicy.Validate(admin.Password, email, policy.Value);
+        if (errors.Length > 0)
+        {
+            throw new InvalidOperationException($"Bootstrap:SuperAdmin:Password chưa đạt chính sách mật khẩu: {string.Join(" ", errors)}");
+        }
 
-        context.Repositories.Add(CodeRepository.Register(
-            project.Id,
-            installationId: 1,
-            owner: "devagent-pilot",
-            name: "sample-app",
-            defaultBranch: "main",
-            RepositoryPolicy.CreateDefault("dotnet build", "dotnet test"),
-            now));
-
-        context.AgentProfiles.AddRange(
-            AgentProfile.Create("planner", AgentStep.Planner, "planner", ["repo.list_files", "repo.read_file", "repo.search"], 16_000),
-            AgentProfile.Create("coding", AgentStep.Coding, "coding", ["repo.read_file", "repo.search", "repo.write_file", "repo.diff"], 32_000),
-            AgentProfile.Create("testing", AgentStep.Testing, "testing", ["sandbox.build", "sandbox.test"], 4_000),
-            AgentProfile.Create("reviewer", AgentStep.Reviewer, "reviewer", ["repo.diff", "repo.read_file"], 16_000));
+        var existing = await context.Users.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+        if (existing is not null)
+        {
+            // Tài khoản đã có (vd tạo trước đó): nâng quyền thay vì tạo trùng email.
+            existing.ChangeRole(SystemRole.SuperAdmin);
+            existing.Activate();
+        }
+        else
+        {
+            var user = User.Create(email, admin.DisplayName, SystemRole.SuperAdmin, clock.GetUtcNow());
+            user.SetPassword(hasher.Hash(admin.Password), mustChange: true);
+            context.Users.Add(user);
+        }
 
         await context.SaveChangesAsync(cancellationToken);
-        LogSeeded(logger, DevelopmentSeedData.ProjectSlug);
+        LogSeeded(logger, email);
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Đã seed dữ liệu phát triển cho project {Slug}")]
-    private static partial void LogSeeded(ILogger logger, string slug);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Đã tạo Super Admin {Email}; bắt buộc đổi mật khẩu ở lần đăng nhập đầu")]
+    private static partial void LogSeeded(ILogger logger, string email);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Chưa có Super Admin và chưa cấu hình Bootstrap:SuperAdmin:Email/Password; không ai đăng nhập được để quản trị")]
+    private static partial void LogMissingBootstrap(ILogger logger);
 }

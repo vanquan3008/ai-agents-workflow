@@ -43,4 +43,10 @@ public sealed class JobRecord
     public DateTimeOffset UpdatedAt { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>Thời điểm chuyển dead-letter.</summary>
+    public DateTimeOffset? DeadLetteredAt { get; set; }
+
+    /// <summary>Thời điểm đã đối soát trạng thái nghiệp vụ cho job dead-letter (null = chưa).</summary>
+    public DateTimeOffset? ReconciledAt { get; set; }
 }

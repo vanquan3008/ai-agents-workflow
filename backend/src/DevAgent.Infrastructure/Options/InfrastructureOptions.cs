@@ -17,9 +17,6 @@ public sealed class DatabaseOptions
     /// <summary>Áp migration khi API khởi động. Bật ở dev/compose; production chạy migration bundle riêng.</summary>
     public bool ApplyMigrationsOnStartup { get; set; }
 
-    /// <summary>Seed user/project/repo mẫu. Chỉ có hiệu lực ở môi trường Development.</summary>
-    public bool SeedDevelopmentData { get; set; }
-
     /// <summary>Log tham số SQL. Không bao giờ bật ở production.</summary>
     public bool EnableSensitiveDataLogging { get; set; }
 }
@@ -46,7 +43,7 @@ public enum AiProvider
     Anthropic = 2,
 }
 
-public sealed class ModelPrice
+public sealed class ModelPriceOptions
 {
     [Range(0, 10_000)]
     public decimal InputPerMillion { get; set; }
@@ -97,7 +94,7 @@ public sealed class AiOptions
     public int MaxRetries { get; set; } = 2;
 
     /// <summary>Đơn giá theo model (USD / 1 triệu token) để ước tính chi phí và kiểm tra ngân sách.</summary>
-    public Dictionary<string, ModelPrice> Pricing { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, ModelPriceOptions> Pricing { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     public AnthropicProviderOptions Anthropic { get; set; } = new();
 
@@ -217,4 +214,23 @@ public sealed class ObservabilityOptions
     /// <summary>json: một dòng JSON/sự kiện cho máy đọc (mặc định); text: dễ đọc khi phát triển.</summary>
     [RegularExpression("^(json|text)$")]
     public string ConsoleFormat { get; set; } = "json";
+}
+
+public sealed class SuperAdminBootstrap
+{
+    public string? Email { get; set; }
+
+    /// <summary>Secret. Cấp qua biến môi trường <c>Bootstrap__SuperAdmin__Password</c>; là mật khẩu tạm, bắt đổi ở lần đăng nhập đầu.</summary>
+    public string? Password { get; set; }
+
+    [Required]
+    public string DisplayName { get; set; } = "Super Admin";
+}
+
+/// <summary>Dữ liệu khởi tạo hệ thống: chỉ tài khoản Super Admin đầu tiên.</summary>
+public sealed class BootstrapOptions
+{
+    public const string SectionName = "Bootstrap";
+
+    public SuperAdminBootstrap SuperAdmin { get; set; } = new();
 }

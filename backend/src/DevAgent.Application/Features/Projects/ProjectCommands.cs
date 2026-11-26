@@ -9,57 +9,76 @@ using DevAgent.Domain.Repositories;
 
 namespace DevAgent.Application.Features.Projects;
 
-// ---------- Tạo project ----------
+// ---------- Tạo project (Super Admin) ----------
 
-public sealed record CreateProjectCommand(string Name, string Slug);
+/// <param name="OwnerEmail">Email người được giao làm Owner; để trống thì Super Admin tạo là Owner.</param>
+public sealed record CreateProjectCommand(string Name, string Slug, string? OwnerEmail);
 
 internal sealed class CreateProjectHandler(
     ProjectAccess access,
     IProjectRepository projects,
+    IUserRepository users,
+    IProjectQueries queries,
     IAuditLog auditLog,
     IUnitOfWork unitOfWork,
     TimeProvider clock) : ICommandHandler<CreateProjectCommand, ProjectDto>
 {
     public async Task<Result<ProjectDto>> HandleAsync(CreateProjectCommand command, CancellationToken cancellationToken)
     {
-        var user = access.RequireAuthenticated();
-        if (user.IsFailure)
+        var admin = await access.RequireSuperAdminAsync("project.create", cancellationToken);
+        if (admin.IsFailure)
         {
-            return user.Error!;
+            return admin.Error!;
         }
 
         if (await projects.SlugExistsAsync(command.Slug.Trim().ToLowerInvariant(), cancellationToken))
         {
-            return Error.Conflict("project.slug_taken", "Slug đã được dùng.");
+            return Error.Validation("project.slug_taken", "Slug đã được dùng.", new Dictionary<string, string[]> { ["slug"] = ["Slug đã được dùng."] });
+        }
+
+        var owner = admin.Value;
+        if (!string.IsNullOrWhiteSpace(command.OwnerEmail))
+        {
+            var found = await users.FindByEmailAsync(command.OwnerEmail.Trim().ToLowerInvariant(), cancellationToken);
+            if (found is not { IsActive: true })
+            {
+                return Error.Validation("project.owner_not_found", "Không tìm thấy người dùng đang hoạt động với email này.",
+                    new Dictionary<string, string[]> { ["ownerEmail"] = ["Không tìm thấy người dùng đang hoạt động với email này."] });
+            }
+
+            owner = found;
         }
 
         var now = clock.GetUtcNow();
-        var project = Project.Create(command.Name, command.Slug, user.Value, now);
+        var project = Project.Create(command.Name, command.Slug, owner.Id, now);
         projects.Add(project);
-        auditLog.Add(AuditEntry.Record(Actor.ForUser(user.Value), "project.create", "project", project.Id.ToString(), AuditOutcome.Allowed, now, project.Id));
+        auditLog.Add(AuditEntry.Record(
+            Actor.ForUser(admin.Value.Id), "project.create", "project", project.Id.ToString(), AuditOutcome.Allowed, now, project.Id,
+            reason: $"owner={owner.Email}"));
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new ProjectDto(project.Id.Value, project.Name, project.Slug, ApiNames.ToApi(ProjectRole.Owner), project.CreatedAt);
+        return (await queries.GetAsync(project.Id, admin.Value.Id, cancellationToken))!;
     }
 }
 
-// ---------- Thêm/cập nhật thành viên ----------
+// ---------- Thêm/cập nhật/xóa thành viên ----------
 
-public sealed record AddProjectMemberCommand(Guid ProjectId, Guid UserId, string Role);
+public sealed record UpsertProjectMemberCommand(Guid ProjectId, string Email, string Role);
 
-internal sealed class AddProjectMemberHandler(
+internal sealed class UpsertProjectMemberHandler(
     ProjectAccess access,
     IProjectRepository projects,
     IUserRepository users,
     IAuditLog auditLog,
     IUnitOfWork unitOfWork,
-    TimeProvider clock) : ICommandHandler<AddProjectMemberCommand, bool>
+    TimeProvider clock) : ICommandHandler<UpsertProjectMemberCommand, bool>
 {
-    public async Task<Result<bool>> HandleAsync(AddProjectMemberCommand command, CancellationToken cancellationToken)
+    public async Task<Result<bool>> HandleAsync(UpsertProjectMemberCommand command, CancellationToken cancellationToken)
     {
         if (!ApiNames.TryParse<ProjectRole>(command.Role, out var role))
         {
-            return Error.Validation("member.role_invalid", "Vai trò không hợp lệ (VIEWER, REQUESTER, APPROVER, OWNER).");
+            return Error.Validation("member.role_invalid", "Vai trò không hợp lệ (VIEWER, REQUESTER, APPROVER, OWNER).",
+                new Dictionary<string, string[]> { ["role"] = ["Vai trò không hợp lệ."] });
         }
 
         var projectId = new ProjectId(command.ProjectId);
@@ -69,18 +88,54 @@ internal sealed class AddProjectMemberHandler(
             return actor.Error!;
         }
 
-        var memberId = new UserId(command.UserId);
-        if (await users.GetByIdAsync(memberId, cancellationToken) is null)
+        var member = string.IsNullOrWhiteSpace(command.Email) ? null : await users.FindByEmailAsync(command.Email.Trim().ToLowerInvariant(), cancellationToken);
+        if (member is not { IsActive: true })
         {
-            return Error.NotFound("user", command.UserId);
+            return Error.Validation("member.user_not_found", "Không tìm thấy người dùng đang hoạt động với email này.",
+                new Dictionary<string, string[]> { ["email"] = ["Không tìm thấy người dùng đang hoạt động với email này. Super Admin cần tạo tài khoản trước."] });
         }
 
         var project = (await projects.GetByIdAsync(projectId, cancellationToken))!;
         var now = clock.GetUtcNow();
-        project.AddOrUpdateMember(memberId, role, now);
+        project.AddOrUpdateMember(member.Id, role, now);
         auditLog.Add(AuditEntry.Record(
             Actor.ForUser(actor.Value), "project.member.upsert", "project", projectId.ToString(), AuditOutcome.Allowed, now, projectId,
-            reason: $"{memberId} => {role}"));
+            reason: $"{member.Email} => {role}"));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+}
+
+public sealed record RemoveProjectMemberCommand(Guid ProjectId, Guid UserId);
+
+internal sealed class RemoveProjectMemberHandler(
+    ProjectAccess access,
+    IProjectRepository projects,
+    IAuditLog auditLog,
+    IUnitOfWork unitOfWork,
+    TimeProvider clock) : ICommandHandler<RemoveProjectMemberCommand, bool>
+{
+    public async Task<Result<bool>> HandleAsync(RemoveProjectMemberCommand command, CancellationToken cancellationToken)
+    {
+        var projectId = new ProjectId(command.ProjectId);
+        var actor = await access.RequireAsync(projectId, ProjectPermission.ManageMembers, "project", projectId.ToString(), cancellationToken);
+        if (actor.IsFailure)
+        {
+            return actor.Error!;
+        }
+
+        var project = (await projects.GetByIdAsync(projectId, cancellationToken))!;
+        var memberId = new UserId(command.UserId);
+        if (project.RoleOf(memberId) is null)
+        {
+            return Error.NotFound("member", command.UserId);
+        }
+
+        var now = clock.GetUtcNow();
+        project.RemoveMember(memberId);
+        auditLog.Add(AuditEntry.Record(
+            Actor.ForUser(actor.Value), "project.member.remove", "project", projectId.ToString(), AuditOutcome.Allowed, now, projectId,
+            reason: memberId.ToString()));
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
     }

@@ -30,6 +30,10 @@ public sealed class WorkerOptions
     /// <summary>File được chạm định kỳ để Docker healthcheck kiểm tra Worker còn sống.</summary>
     public string? HeartbeatFile { get; set; }
 
+    /// <summary>Chu kỳ quét job dead-letter để đối soát trạng thái task.</summary>
+    [Range(5, 3600)]
+    public int DeadLetterScanIntervalSeconds { get; set; } = 15;
+
     /// <summary>Thời gian chờ các job đang chạy kết thúc khi tắt Worker.</summary>
     [Range(1, 600)]
     public int ShutdownGraceSeconds { get; set; } = 30;

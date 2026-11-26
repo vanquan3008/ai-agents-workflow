@@ -25,11 +25,12 @@ try
         metrics => metrics.AddAspNetCoreInstrumentation());
 
     builder.Services.AddApplication();
+    builder.Services.AddAuthModule();
     builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
     builder.Services.AddDatabaseInitializer();
     builder.Services.AddRealtimeListener<SignalRTaskEventSink>();
 
-    builder.Services.AddDevAgentAuth(builder.Configuration, builder.Environment);
+    builder.Services.AddDevAgentAuth(builder.Configuration);
     builder.Services.AddDevAgentRateLimiting(builder.Configuration);
     builder.Services.AddSignalR();
     builder.Services.AddProblemDetails();
@@ -39,7 +40,7 @@ try
     var cors = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new();
     builder.Services.AddCors(options => options.AddPolicy(CorsOptions.PolicyName, policy => policy
         .WithOrigins(cors.AllowedOrigins)
-        .AllowAnyHeader()
+        .WithHeaders("Authorization", "Content-Type", "Idempotency-Key", "X-DevAgent-Client", "X-Requested-With", "x-signalr-user-agent")
         .AllowAnyMethod()
         .AllowCredentials()
         .WithExposedHeaders("Location")));
@@ -68,11 +69,15 @@ try
     app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
     app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") }).AllowAnonymous();
 
-    var api = app.MapGroup("/api/v1").RequireAuthorization();
-    api.MapProjectsEndpoints()
+    app.MapGroup("/api/v1").MapAuthEndpoints();
+
+    var api = app.MapGroup("/api/v1").RequireAuthorization().RequirePasswordChanged();
+    api.MapAdminEndpoints()
+        .MapProjectsEndpoints()
         .MapTasksEndpoints()
         .MapApprovalsEndpoints()
-        .MapExecutionsEndpoints();
+        .MapExecutionsEndpoints()
+        .MapWorkflowsEndpoints();
 
     app.MapHub<TasksHub>(TasksHub.Path);
 

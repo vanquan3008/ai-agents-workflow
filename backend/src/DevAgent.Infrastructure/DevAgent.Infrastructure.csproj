@@ -29,4 +29,7 @@
     <PackageReference Include="Serilog.Sinks.Console" />
     <PackageReference Include="Serilog.Enrichers.Environment" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="DevAgent.Infrastructure.Tests" />
+  </ItemGroup>
 </Project>

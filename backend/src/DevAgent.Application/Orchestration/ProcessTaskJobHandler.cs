@@ -17,25 +17,32 @@ internal sealed partial class ProcessTaskJobHandler(
     public async Task HandleAsync(LeasedJob job, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(job);
-        var payload = JsonSerializer.Deserialize<ProcessTaskPayload>(job.PayloadJson)
-            ?? throw new InvalidOperationException($"Payload job {job.Id} không hợp lệ.");
-        var taskId = new TaskId(payload.TaskId);
-
-        try
-        {
-            await orchestrator.AdvanceAsync(taskId, worker.WorkerId, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException && job.Attempt >= job.MaxAttempts)
-        {
-            // Lần thử cuối: ghi lý do lên task để người vận hành thấy, rồi để job vào dead-letter.
-            LogFinalFailure(logger, ex, taskId, job.Attempt);
-            await orchestrator.MarkFailedAsync(taskId, $"Xử lý thất bại sau {job.Attempt} lần thử: {ex.Message}", CancellationToken.None);
-            throw;
-        }
+        var taskId = ParseTaskId(job.PayloadJson, job.Id);
+        using var scope = logger.BeginScope(new Dictionary<string, object> { ["TaskId"] = taskId.Value });
+        await orchestrator.AdvanceAsync(taskId, worker.WorkerId, cancellationToken);
     }
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Task {TaskId} thất bại ở lần thử cuối {Attempt}")]
-    private static partial void LogFinalFailure(ILogger logger, Exception exception, TaskId taskId, int attempt);
+    /// <summary>
+    /// Đối soát khi job hết lượt thử — gồm cả trường hợp Worker chết ở lần thử cuối (chỉ bảng job được cập nhật):
+    /// chuyển task sang FAILED và đóng execution còn treo, kèm lý do lỗi cuối cùng.
+    /// </summary>
+    public async Task OnDeadLetterAsync(DeadLetterJob job, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        var taskId = ParseTaskId(job.PayloadJson, job.Id);
+        LogDeadLetter(logger, taskId, job.Attempt, job.LastError);
+        await orchestrator.MarkFailedAsync(
+            taskId,
+            $"Xử lý thất bại sau {job.Attempt}/{job.MaxAttempts} lần thử: {job.LastError ?? "không rõ lỗi"}",
+            cancellationToken);
+    }
+
+    private static TaskId ParseTaskId(string payload, Guid jobId) =>
+        new((JsonSerializer.Deserialize<ProcessTaskPayload>(payload)
+            ?? throw new InvalidOperationException($"Payload job {jobId} không hợp lệ.")).TaskId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Task {TaskId} hết lượt thử ({Attempt}); đánh dấu thất bại. Lỗi cuối: {LastError}")]
+    private static partial void LogDeadLetter(ILogger logger, TaskId taskId, int attempt, string? lastError);
 }
 
 /// <summary>Định danh tiến trình Worker hiện tại (ghi vào lease, execution và AgentInstance).</summary>

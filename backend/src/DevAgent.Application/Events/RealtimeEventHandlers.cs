@@ -1,27 +1,22 @@
 using DevAgent.Application.Abstractions.Events;
-using DevAgent.Application.Abstractions.Integrations;
 using DevAgent.Application.Abstractions.Realtime;
 using DevAgent.Application.Common;
 using DevAgent.Application.Features.Tasks;
-using DevAgent.Application.Options;
 using DevAgent.Domain.Approvals;
 using DevAgent.Domain.Tasks;
-using Microsoft.Extensions.Options;
 
 namespace DevAgent.Application.Events;
 
-/// <summary>Đẩy thay đổi trạng thái tới dashboard và gửi thông báo chat ở các mốc người dùng cần biết.</summary>
-internal sealed class TaskStatusChangedHandler(
-    ITaskEventPublisher publisher,
-    IChatNotifier notifier,
-    ITaskQueries taskQueries,
-    IOptions<PublicUrlsOptions> urls) : IDomainEventHandler<TaskStatusChanged>
+/// <summary>
+/// Đẩy thay đổi trạng thái tới dashboard (best-effort, sau commit). Thông báo chat đi qua outbox
+/// (<see cref="Notifications.TaskNotificationOutbox"/>) để không bị mất.
+/// </summary>
+internal sealed class TaskStatusChangedHandler(ITaskEventPublisher publisher) : IDomainEventHandler<TaskStatusChanged>
 {
-    public async Task HandleAsync(TaskStatusChanged domainEvent, CancellationToken cancellationToken)
+    public Task HandleAsync(TaskStatusChanged domainEvent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
-
-        await publisher.PublishAsync(
+        return publisher.PublishAsync(
             new TaskRealtimeEvent(
                 domainEvent.TaskId.Value,
                 domainEvent.ProjectId.Value,
@@ -30,37 +25,6 @@ internal sealed class TaskStatusChangedHandler(
                 ApiNames.ToApi(domainEvent.To),
                 domainEvent.Reason,
                 domainEvent.OccurredAt),
-            cancellationToken);
-
-        var kind = domainEvent.To switch
-        {
-            AgentTaskStatus.Pending when domainEvent.From is null => ChatNotificationKind.TaskAccepted,
-            AgentTaskStatus.WaitingForApproval => ChatNotificationKind.ApprovalRequired,
-            AgentTaskStatus.NeedsClarification => ChatNotificationKind.ClarificationNeeded,
-            AgentTaskStatus.Completed => ChatNotificationKind.Completed,
-            AgentTaskStatus.Failed or AgentTaskStatus.TimedOut or AgentTaskStatus.Rejected => ChatNotificationKind.Failed,
-            AgentTaskStatus.Blocked => ChatNotificationKind.Blocked,
-            AgentTaskStatus.Cancelled => ChatNotificationKind.Cancelled,
-            _ => (ChatNotificationKind?)null,
-        };
-
-        if (kind is null)
-        {
-            return;
-        }
-
-        var task = await taskQueries.GetAsync(domainEvent.TaskId, cancellationToken);
-        if (task is null)
-        {
-            return;
-        }
-
-        var link = kind == ChatNotificationKind.Completed && task.PullRequest is not null
-            ? task.PullRequest.Url
-            : urls.Value.TaskUrl(task.Id);
-
-        await notifier.NotifyAsync(
-            new ChatNotification(kind.Value, task.Id, task.ProjectId, task.Title, domainEvent.Reason ?? task.Status, link, task.SourceReference),
             cancellationToken);
     }
 }

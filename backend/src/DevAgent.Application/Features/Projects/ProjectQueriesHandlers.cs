@@ -7,15 +7,39 @@ namespace DevAgent.Application.Features.Projects;
 
 public sealed record ListMyProjectsQuery;
 
+/// <summary>Project người dùng tham gia; Super Admin thấy mọi project.</summary>
 internal sealed class ListMyProjectsHandler(ProjectAccess access, IProjectQueries queries)
     : IQueryHandler<ListMyProjectsQuery, IReadOnlyList<ProjectDto>>
 {
     public async Task<Result<IReadOnlyList<ProjectDto>>> HandleAsync(ListMyProjectsQuery query, CancellationToken cancellationToken)
     {
-        var user = access.RequireAuthenticated();
-        return user.IsFailure
-            ? Result<IReadOnlyList<ProjectDto>>.Failure(user.Error!)
-            : Result<IReadOnlyList<ProjectDto>>.Success(await queries.ListForUserAsync(user.Value, cancellationToken));
+        var user = await access.CurrentActiveUserAsync(cancellationToken);
+        if (user is null)
+        {
+            return Error.Unauthorized();
+        }
+
+        return Result<IReadOnlyList<ProjectDto>>.Success(user.IsSuperAdmin
+            ? await queries.ListAllAsync(user.Id, cancellationToken)
+            : await queries.ListForUserAsync(user.Id, cancellationToken));
+    }
+}
+
+public sealed record GetProjectQuery(Guid ProjectId);
+
+internal sealed class GetProjectHandler(ProjectAccess access, IProjectQueries queries) : IQueryHandler<GetProjectQuery, ProjectDto>
+{
+    public async Task<Result<ProjectDto>> HandleAsync(GetProjectQuery query, CancellationToken cancellationToken)
+    {
+        var projectId = new ProjectId(query.ProjectId);
+        var user = await access.RequireAsync(projectId, ProjectPermission.ViewTasks, "project", projectId.ToString(), cancellationToken);
+        if (user.IsFailure)
+        {
+            return user.Error!;
+        }
+
+        var project = await queries.GetAsync(projectId, user.Value, cancellationToken);
+        return project is null ? Error.NotFound("project", query.ProjectId) : project;
     }
 }
 

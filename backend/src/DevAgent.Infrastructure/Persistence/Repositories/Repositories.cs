@@ -8,6 +8,7 @@ using DevAgent.Domain.Projects;
 using DevAgent.Domain.Repositories;
 using DevAgent.Domain.Tasks;
 using DevAgent.Domain.Users;
+using DevAgent.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
 
 namespace DevAgent.Infrastructure.Persistence.Repositories;
@@ -19,6 +20,12 @@ internal sealed class UserRepository(DevAgentDbContext context) : IUserRepositor
 
     public Task<User?> FindByExternalIdentityAsync(IdentityProvider provider, string externalId, CancellationToken cancellationToken) =>
         context.Users.FirstOrDefaultAsync(u => u.Identities.Any(i => i.Provider == provider && i.ExternalId == externalId), cancellationToken);
+
+    public Task<User?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken) =>
+        context.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
+
+    public Task<int> CountActiveSuperAdminsAsync(CancellationToken cancellationToken) =>
+        context.Users.CountAsync(u => u.SystemRole == SystemRole.SuperAdmin && u.IsActive, cancellationToken);
 
     public void Add(User user) => context.Users.Add(user);
 }
@@ -68,7 +75,12 @@ internal sealed class ExecutionRepository(DevAgentDbContext context) : IExecutio
     public Task<int> CountAttemptsAsync(TaskId taskId, AgentStep step, CancellationToken cancellationToken) =>
         context.Executions.CountAsync(e => e.TaskId == taskId && e.Step == step, cancellationToken);
 
-    public async Task<TokenUsage> GetTaskUsageAsync(TaskId taskId, CancellationToken cancellationToken)
+    public Task<int> CountFailuresSinceAsync(TaskId taskId, AgentStep step, DateTimeOffset since, CancellationToken cancellationToken) =>
+        context.Executions.CountAsync(
+            e => e.TaskId == taskId && e.Step == step && e.Status == ExecutionStatus.Failed && e.StartedAt >= since,
+            cancellationToken);
+
+    public async Task<TaskUsageTotals> GetTaskUsageAsync(TaskId taskId, CancellationToken cancellationToken)
     {
         var totals = await context.Executions
             .Where(e => e.TaskId == taskId)
@@ -79,10 +91,13 @@ internal sealed class ExecutionRepository(DevAgentDbContext context) : IExecutio
                 Output = g.Sum(e => e.Usage.OutputTokens),
                 CacheRead = g.Sum(e => e.Usage.CacheReadTokens),
                 Cost = g.Sum(e => e.Usage.EstimatedCostUsd),
+                Calls = g.Sum(e => e.ModelCalls),
             })
             .SingleOrDefaultAsync(cancellationToken);
 
-        return totals is null ? TokenUsage.Zero : new TokenUsage(totals.Input, totals.Output, totals.CacheRead, totals.Cost);
+        return totals is null
+            ? TaskUsageTotals.Zero
+            : new TaskUsageTotals(new TokenUsage(totals.Input, totals.Output, totals.CacheRead, totals.Cost), totals.Calls);
     }
 
     public void Add(AgentExecution execution) => context.Executions.Add(execution);
@@ -112,4 +127,30 @@ internal sealed class AgentInstanceRepository(DevAgentDbContext context) : IAgen
 internal sealed class AuditLog(DevAgentDbContext context) : IAuditLog
 {
     public void Add(AuditEntry entry) => context.AuditEntries.Add(entry);
+}
+
+internal sealed class WorkflowRevisionRepository(DevAgentDbContext context) : IWorkflowRevisionRepository
+{
+    public async Task<IReadOnlyList<WorkflowRevision>> ListByRepositoryAsync(RepositoryId repositoryId, int limit, CancellationToken cancellationToken) =>
+        await context.WorkflowRevisions.AsNoTracking()
+            .Where(r => r.RepositoryId == repositoryId)
+            .OrderByDescending(r => r.Version)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+
+    public void Add(WorkflowRevision revision) => context.WorkflowRevisions.Add(revision);
+}
+
+internal sealed class RefreshTokenRepository(DevAgentDbContext context) : IRefreshTokenRepository
+{
+    public Task<RefreshToken?> FindByHashAsync(string tokenHash, CancellationToken cancellationToken) =>
+        context.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+
+    public async Task<IReadOnlyList<RefreshToken>> ListActiveByFamilyAsync(Guid familyId, CancellationToken cancellationToken) =>
+        await context.RefreshTokens.Where(t => t.FamilyId == familyId && t.RevokedAt == null).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<RefreshToken>> ListActiveByUserAsync(UserId userId, CancellationToken cancellationToken) =>
+        await context.RefreshTokens.Where(t => t.UserId == userId && t.RevokedAt == null).ToListAsync(cancellationToken);
+
+    public void Add(RefreshToken token) => context.RefreshTokens.Add(token);
 }

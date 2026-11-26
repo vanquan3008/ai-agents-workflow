@@ -36,12 +36,21 @@ public sealed record ModelUsage(long InputTokens, long OutputTokens, long CacheR
 
 public sealed record ModelResponse(string Text, ModelStopReason StopReason, string? StopDetail, ModelUsage Usage, string Model);
 
+/// <summary>Đơn giá theo model (USD / 1 triệu token), dùng để giới hạn trần đầu ra theo ngân sách còn lại.</summary>
+public sealed record ModelPrice(decimal InputPerMillion, decimal OutputPerMillion, decimal CacheReadPerMillion)
+{
+    public static ModelPrice Free { get; } = new(0m, 0m, 0m);
+}
+
 public interface IModelClient
 {
     string ProviderName { get; }
 
     /// <summary>Model sẽ dùng cho một mục đích, để ghi vào AgentExecution trước khi gọi.</summary>
     string ResolveModel(string purpose);
+
+    /// <summary>Đơn giá của model; null nếu chưa cấu hình (khi đó hệ thống từ chối gọi để không vượt ngân sách).</summary>
+    ModelPrice? GetPrice(string model);
 
     Task<ModelResponse> CompleteAsync(ModelRequest request, CancellationToken cancellationToken);
 }

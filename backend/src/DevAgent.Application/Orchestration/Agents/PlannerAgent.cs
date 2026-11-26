@@ -9,7 +9,7 @@ using DevAgent.Domain.Tasks;
 
 namespace DevAgent.Application.Orchestration.Agents;
 
-public sealed record PlannerInput(AgentTask Task, CodeRepository Repository, IReadOnlyList<RepositoryFile> Files, int MaxOutputTokens);
+public sealed record PlannerInput(AgentTask Task, CodeRepository Repository, IReadOnlyList<RepositoryFile> Files);
 
 public sealed record PlannerOutput(
     bool NeedsClarification,
@@ -22,11 +22,18 @@ public sealed record PlannerOutput(
 
 public sealed record PlannerResult(PlannerOutput? Output, ModelResponse Response, string? ParseError);
 
+/// <summary>
+/// Hai pha tách rời để Orchestrator kiểm tra ngân sách giữa chúng: dựng request (biết kích thước đầu vào),
+/// rồi mới gọi model với trần đầu ra đã được cấp.
+/// </summary>
 public interface IPlannerAgent
 {
-    string ResolveModel();
+    /// <summary>Model mặc định của bước Planner theo cấu hình hệ thống.</summary>
+    string DefaultModel();
 
-    Task<PlannerResult> PlanAsync(PlannerInput input, CancellationToken cancellationToken);
+    ModelRequest BuildRequest(PlannerInput input, string model, int maxOutputTokens);
+
+    Task<PlannerResult> ExecuteAsync(ModelRequest request, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -71,18 +78,22 @@ internal sealed class PlannerAgent(IModelClient modelClient) : IPlannerAgent
         AllowTrailingCommas = true,
     };
 
-    public string ResolveModel() => modelClient.ResolveModel(Purpose);
+    public string DefaultModel() => modelClient.ResolveModel(Purpose);
 
-    public async Task<PlannerResult> PlanAsync(PlannerInput input, CancellationToken cancellationToken)
+    public ModelRequest BuildRequest(PlannerInput input, string model, int maxOutputTokens)
     {
         ArgumentNullException.ThrowIfNull(input);
-
-        var request = new ModelRequest(
+        return new ModelRequest(
             Purpose,
             SystemPrompt,
             [new ModelMessage(ModelRole.User, BuildUserMessage(input))],
-            input.MaxOutputTokens);
+            maxOutputTokens,
+            model);
+    }
 
+    public async Task<PlannerResult> ExecuteAsync(ModelRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
         var response = await modelClient.CompleteAsync(request, cancellationToken);
         if (response.StopReason != ModelStopReason.Completed)
         {

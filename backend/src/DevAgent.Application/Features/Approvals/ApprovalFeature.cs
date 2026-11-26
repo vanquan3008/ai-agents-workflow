@@ -160,7 +160,7 @@ internal sealed class DecideApprovalHandler(
 
 public sealed record ListApprovalsQuery(Guid? ProjectId, Guid? TaskId, string? Status, int? Page, int? PageSize);
 
-internal sealed class ListApprovalsHandler(ProjectAccess access, IProjectQueries projectQueries, IApprovalQueries approvalQueries)
+internal sealed class ListApprovalsHandler(ProjectAccess access, IApprovalQueries approvalQueries)
     : IQueryHandler<ListApprovalsQuery, PagedResult<ApprovalDto>>
 {
     public async Task<Result<PagedResult<ApprovalDto>>> HandleAsync(ListApprovalsQuery query, CancellationToken cancellationToken)
@@ -190,13 +190,14 @@ internal sealed class ListApprovalsHandler(ProjectAccess access, IProjectQueries
         }
         else
         {
-            var user = access.RequireAuthenticated();
-            if (user.IsFailure)
+            // Không truyền project: chỉ project người dùng được xem (Super Admin: mọi project).
+            var allowed = await access.ProjectsWithPermissionAsync(ProjectPermission.ViewTasks, cancellationToken);
+            if (allowed.IsFailure)
             {
-                return user.Error!;
+                return allowed.Error!;
             }
 
-            projectIds = await projectQueries.ListProjectIdsWithPermissionAsync(user.Value, ProjectPermission.ViewTasks, cancellationToken);
+            projectIds = allowed.Value;
         }
 
         return await approvalQueries.ListAsync(

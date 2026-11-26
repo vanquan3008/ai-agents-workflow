@@ -92,6 +92,9 @@ public sealed class AgentExecution : AggregateRoot<ExecutionId>
 
     public TokenUsage Usage { get; private set; }
 
+    /// <summary>Số lần gọi model trong lần chạy này (để áp trần số lần gọi mỗi task).</summary>
+    public int ModelCalls { get; private set; }
+
     /// <summary>Trạng thái tiến độ dạng JSON do bước agent tự định nghĩa (điểm lưu tiến độ).</summary>
     public string? Checkpoint { get; private set; }
 
@@ -130,6 +133,16 @@ public sealed class AgentExecution : AggregateRoot<ExecutionId>
             Guard.Utc(now, "started_at"));
     }
 
+    /// <summary>Ghi nhận một lần gọi model và lượng token/chi phí của nó.</summary>
+    public void RecordModelCall(TokenUsage usage)
+    {
+        ArgumentNullException.ThrowIfNull(usage);
+        EnsureRunning();
+        Usage = Usage.Add(usage);
+        ModelCalls++;
+    }
+
+    /// <summary>Cập nhật usage khi cuộc gọi đã ghi nhận trả kết quả.</summary>
     public void RecordUsage(TokenUsage usage)
     {
         ArgumentNullException.ThrowIfNull(usage);

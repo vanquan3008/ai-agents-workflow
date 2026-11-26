@@ -16,5 +16,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="DevAgent.Application.Tests" />
+    <InternalsVisibleTo Include="DevAgent.Api.IntegrationTests" />
   </ItemGroup>
 </Project>

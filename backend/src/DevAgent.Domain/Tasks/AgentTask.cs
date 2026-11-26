@@ -1,5 +1,6 @@
 using DevAgent.Domain.Common;
 using DevAgent.Domain.Policies;
+using DevAgent.Domain.Workflows;
 
 namespace DevAgent.Domain.Tasks;
 
@@ -69,6 +70,16 @@ public sealed class AgentTask : AggregateRoot<TaskId>
     public string? WorkBranch { get; private set; }
 
     public AgentTaskStatus Status { get; private set; }
+
+    /// <summary>
+    /// Ảnh chụp quy trình tại lúc bắt đầu lượt xử lý: đổi quy trình của repo giữa chừng không ảnh hưởng task đang chạy.
+    /// Null khi task chưa bắt đầu.
+    /// </summary>
+    public WorkflowDefinition? Workflow { get; private set; }
+
+    public int? WorkflowVersion { get; private set; }
+
+    public WorkflowDefinition EffectiveWorkflow => Workflow ?? WorkflowDefinition.Default;
 
     public string? StatusReason { get; private set; }
 
@@ -144,12 +155,24 @@ public sealed class AgentTask : AggregateRoot<TaskId>
         return task;
     }
 
-    public void StartPlanning(string baseCommitSha, string workBranch, Actor actor, DateTimeOffset now)
+    public void StartPlanning(string baseCommitSha, string workBranch, WorkflowDefinition workflow, int workflowVersion, Actor actor, DateTimeOffset now)
     {
+        ArgumentNullException.ThrowIfNull(workflow);
+        if (workflowVersion < 0)
+        {
+            throw new DomainException("task.workflow_version_invalid", "Phiên bản quy trình không hợp lệ.");
+        }
+
         BaseCommitSha = CommitSha.Validate(baseCommitSha);
         WorkBranch = Guard.NotEmpty(workBranch, "work_branch", 255);
-        TransitionTo(AgentTaskStatus.Planning, actor, "Bắt đầu lập kế hoạch.", now);
+        Workflow = workflow;
+        WorkflowVersion = workflowVersion;
+        TransitionTo(AgentTaskStatus.Planning, actor, $"Bắt đầu lập kế hoạch (quy trình v{workflowVersion}).", now);
     }
+
+    /// <summary>Thời điểm task vào Planning gần nhất: mốc bắt đầu của lượt lập kế hoạch hiện tại.</summary>
+    public DateTimeOffset? CurrentPlanningStartedAt =>
+        _transitions.Where(t => t.To == AgentTaskStatus.Planning).MaxBy(t => t.Sequence)?.OccurredAt;
 
     public TaskPlan AttachPlan(
         string summary,

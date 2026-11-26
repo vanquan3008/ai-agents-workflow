@@ -7,6 +7,7 @@ using DevAgent.Domain.Projects;
 using DevAgent.Domain.Repositories;
 using DevAgent.Domain.Tasks;
 using DevAgent.Domain.Users;
+using DevAgent.Domain.Workflows;
 using DevAgent.Infrastructure.Persistence.Converters;
 using DevAgent.Infrastructure.Persistence.Jobs;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,8 @@ namespace DevAgent.Infrastructure.Persistence;
 public sealed class DevAgentDbContext(DbContextOptions<DevAgentDbContext> options) : DbContext(options)
 {
     public DbSet<User> Users => Set<User>();
+
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public DbSet<Project> Projects => Set<Project>();
 
@@ -36,6 +39,8 @@ public sealed class DevAgentDbContext(DbContextOptions<DevAgentDbContext> option
     public DbSet<AgentInstance> AgentInstances => Set<AgentInstance>();
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+
+    public DbSet<WorkflowRevision> WorkflowRevisions => Set<WorkflowRevision>();
 
     public DbSet<JobRecord> Jobs => Set<JobRecord>();
 
@@ -61,6 +66,9 @@ public sealed class DevAgentDbContext(DbContextOptions<DevAgentDbContext> option
         configurationBuilder.Properties<AgentProfileId>().HaveConversion<AgentProfileIdConverter>();
         configurationBuilder.Properties<AgentInstanceId>().HaveConversion<AgentInstanceIdConverter>();
         configurationBuilder.Properties<AuditEntryId>().HaveConversion<AuditEntryIdConverter>();
+        configurationBuilder.Properties<WorkflowRevisionId>().HaveConversion<WorkflowRevisionIdConverter>();
+        configurationBuilder.Properties<RefreshTokenId>().HaveConversion<RefreshTokenIdConverter>();
+        configurationBuilder.Properties<SystemRole>().HaveConversion<string>().HaveMaxLength(20);
 
         // Enum lưu dạng chuỗi: đọc được khi truy vấn tay và an toàn khi thêm giá trị mới.
         configurationBuilder.Properties<AgentTaskStatus>().HaveConversion<string>().HaveMaxLength(40);

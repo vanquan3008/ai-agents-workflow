@@ -5,9 +5,10 @@ using DevAgent.Domain.Repositories;
 
 namespace DevAgent.Application.Features.Projects;
 
-public sealed record ProjectDto(Guid Id, string Name, string Slug, string MyRole, DateTimeOffset CreatedAt);
+/// <param name="MyRole">Vai trò của người xem trong project; Super Admin không là thành viên thì là SUPER_ADMIN.</param>
+public sealed record ProjectDto(Guid Id, string Name, string Slug, string MyRole, int MemberCount, int RepositoryCount, DateTimeOffset CreatedAt);
 
-public sealed record ProjectMemberDto(Guid UserId, string DisplayName, string Role, DateTimeOffset AddedAt);
+public sealed record ProjectMemberDto(Guid UserId, string DisplayName, string Email, string Role, DateTimeOffset AddedAt);
 
 public sealed record SensitivePathDto(string Pattern, string Area);
 
@@ -28,6 +29,7 @@ public sealed record RepositoryDto(
     string DefaultBranch,
     long InstallationId,
     RepositoryPolicyDto Policy,
+    int WorkflowVersion,
     bool IsActive,
     DateTimeOffset CreatedAt)
 {
@@ -50,6 +52,7 @@ public sealed record RepositoryDto(
                 policy.BuildCommand,
                 policy.TestCommand,
                 policy.MaxChangedFiles),
+            repository.WorkflowVersion,
             repository.IsActive,
             repository.CreatedAt);
     }
@@ -58,7 +61,15 @@ public sealed record RepositoryDto(
 /// <summary>Truy vấn đọc cho module Projects (hiện thực bằng projection EF, không tải aggregate).</summary>
 public interface IProjectQueries
 {
+    /// <summary>Project mà người dùng là thành viên.</summary>
     Task<IReadOnlyList<ProjectDto>> ListForUserAsync(UserId userId, CancellationToken cancellationToken);
+
+    /// <summary>Mọi project (Super Admin); <paramref name="viewer"/> để điền vai trò nếu là thành viên.</summary>
+    Task<IReadOnlyList<ProjectDto>> ListAllAsync(UserId viewer, CancellationToken cancellationToken);
+
+    Task<ProjectDto?> GetAsync(ProjectId projectId, UserId viewer, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ProjectId>> ListAllProjectIdsAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyList<ProjectMemberDto>> ListMembersAsync(ProjectId projectId, CancellationToken cancellationToken);
 

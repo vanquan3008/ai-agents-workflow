@@ -3,6 +3,8 @@ using DevAgent.Domain.Policies;
 using DevAgent.Domain.Projects;
 using DevAgent.Domain.Repositories;
 using DevAgent.Domain.Users;
+using DevAgent.Domain.Workflows;
+using DevAgent.Infrastructure.Persistence.Converters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -16,7 +18,15 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.ToTable("users");
         builder.HasKey(u => u.Id);
         builder.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
-        builder.Property(u => u.Email).HasMaxLength(320);
+        builder.Property(u => u.Email).HasMaxLength(320).IsRequired();
+        builder.Property(u => u.PasswordHash).HasMaxLength(500);
+        builder.Property(u => u.SecurityStamp).HasMaxLength(64).IsRequired();
+        builder.Ignore(u => u.IsSuperAdmin);
+
+        // Email (đã chuẩn hóa chữ thường) là định danh đăng nhập: duy nhất.
+        builder.HasIndex(u => u.Email).IsUnique();
+        builder.HasIndex(u => new { u.SystemRole, u.IsActive });
+        builder.HasXminConcurrencyToken();
 
         builder.OwnsMany(u => u.Identities, identity =>
         {
@@ -90,6 +100,11 @@ internal sealed class CodeRepositoryConfiguration : IEntityTypeConfiguration<Cod
                     p => p))
             .IsRequired();
 
+        builder.Property(r => r.Workflow)
+            .HasColumnType("jsonb")
+            .HasConversion(WorkflowJson.Converter, WorkflowJson.Comparer)
+            .IsRequired();
+
         builder.Ignore(r => r.DomainEvents);
     }
 
@@ -110,5 +125,45 @@ internal sealed class CodeRepositoryConfiguration : IEntityTypeConfiguration<Cod
             policy.MaxChangedFiles);
 
         public RepositoryPolicy ToPolicy() => new(Version, AutoFixPaths, SensitivePaths, BuildCommand, TestCommand, MaxChangedFiles);
+    }
+}
+
+internal sealed class WorkflowRevisionConfiguration : IEntityTypeConfiguration<WorkflowRevision>
+{
+    public void Configure(EntityTypeBuilder<WorkflowRevision> builder)
+    {
+        builder.ToTable("workflow_revisions");
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Id).ValueGeneratedNever();
+        builder.Property(r => r.Definition).HasColumnType("jsonb").HasConversion(WorkflowJson.Converter, WorkflowJson.Comparer).IsRequired();
+        builder.Property(r => r.Comment).HasMaxLength(1000);
+        builder.HasOne<CodeRepository>().WithMany().HasForeignKey(r => r.RepositoryId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<User>().WithMany().HasForeignKey(r => r.ChangedBy).OnDelete(DeleteBehavior.Restrict);
+
+        // Mỗi phiên bản của một repo chỉ có một bản ghi; cũng là chỉ mục đọc lịch sử mới nhất trước.
+        builder.HasIndex(r => new { r.RepositoryId, r.Version }).IsUnique();
+        builder.Ignore(r => r.DomainEvents);
+    }
+}
+
+internal sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
+{
+    public void Configure(EntityTypeBuilder<RefreshToken> builder)
+    {
+        builder.ToTable("refresh_tokens");
+        builder.HasKey(t => t.Id);
+        builder.Property(t => t.Id).ValueGeneratedNever();
+        builder.Property(t => t.TokenHash).HasMaxLength(200).IsRequired();
+        builder.Property(t => t.RevokedReason).HasMaxLength(100);
+        builder.Property(t => t.CreatedByIp).HasMaxLength(64);
+        builder.Property(t => t.UserAgent).HasMaxLength(500);
+        builder.Ignore(t => t.WasRotated);
+        builder.Ignore(t => t.DomainEvents);
+        builder.HasOne<User>().WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(t => t.TokenHash).IsUnique();
+        builder.HasIndex(t => new { t.FamilyId, t.RevokedAt });
+        builder.HasIndex(t => new { t.UserId, t.RevokedAt });
+        builder.HasIndex(t => t.ExpiresAt);
     }
 }

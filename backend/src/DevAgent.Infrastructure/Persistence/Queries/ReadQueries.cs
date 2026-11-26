@@ -1,4 +1,5 @@
 using DevAgent.Application.Common;
+using DevAgent.Application.Features.Admin;
 using DevAgent.Application.Features.Approvals;
 using DevAgent.Application.Features.Executions;
 using DevAgent.Application.Features.Projects;
@@ -15,27 +16,28 @@ namespace DevAgent.Infrastructure.Persistence.Queries;
 /// <summary>Phía đọc (CQRS-lite): truy vấn không theo dõi thay đổi, trả DTO trực tiếp.</summary>
 internal sealed class ProjectQueries(DevAgentDbContext context) : IProjectQueries
 {
-    public async Task<IReadOnlyList<ProjectDto>> ListForUserAsync(UserId userId, CancellationToken cancellationToken)
-    {
-        var rows = await context.Projects.AsNoTracking()
-            .Where(p => p.Members.Any(m => m.UserId == userId))
-            .OrderBy(p => p.Name)
-            .Select(p => new { p.Id, p.Name, p.Slug, p.CreatedAt, Role = p.Members.First(m => m.UserId == userId).Role })
-            .ToListAsync(cancellationToken);
+    public Task<IReadOnlyList<ProjectDto>> ListForUserAsync(UserId userId, CancellationToken cancellationToken) =>
+        ProjectRowsAsync(context.Projects.AsNoTracking().Where(p => p.Members.Any(m => m.UserId == userId)), userId, cancellationToken);
 
-        return rows.Select(r => new ProjectDto(r.Id.Value, r.Name, r.Slug, ApiNames.ToApi(r.Role), r.CreatedAt)).ToArray();
-    }
+    public Task<IReadOnlyList<ProjectDto>> ListAllAsync(UserId viewer, CancellationToken cancellationToken) =>
+        ProjectRowsAsync(context.Projects.AsNoTracking(), viewer, cancellationToken);
+
+    public async Task<ProjectDto?> GetAsync(ProjectId projectId, UserId viewer, CancellationToken cancellationToken) =>
+        (await ProjectRowsAsync(context.Projects.AsNoTracking().Where(p => p.Id == projectId), viewer, cancellationToken)).SingleOrDefault();
+
+    public async Task<IReadOnlyList<ProjectId>> ListAllProjectIdsAsync(CancellationToken cancellationToken) =>
+        await context.Projects.AsNoTracking().Select(p => p.Id).ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ProjectMemberDto>> ListMembersAsync(ProjectId projectId, CancellationToken cancellationToken)
     {
         var rows = await context.Projects.AsNoTracking()
             .Where(p => p.Id == projectId)
             .SelectMany(p => p.Members)
-            .Join(context.Users, m => m.UserId, u => u.Id, (m, u) => new { m.UserId, u.DisplayName, m.Role, m.AddedAt })
+            .Join(context.Users, m => m.UserId, u => u.Id, (m, u) => new { m.UserId, u.DisplayName, u.Email, m.Role, m.AddedAt })
             .OrderBy(r => r.DisplayName)
             .ToListAsync(cancellationToken);
 
-        return rows.Select(r => new ProjectMemberDto(r.UserId.Value, r.DisplayName, ApiNames.ToApi(r.Role), r.AddedAt)).ToArray();
+        return rows.Select(r => new ProjectMemberDto(r.UserId.Value, r.DisplayName, r.Email, ApiNames.ToApi(r.Role), r.AddedAt)).ToArray();
     }
 
     public async Task<IReadOnlyList<ProjectId>> ListProjectIdsWithPermissionAsync(
@@ -58,6 +60,94 @@ internal sealed class ProjectQueries(DevAgentDbContext context) : IProjectQuerie
             .ToListAsync(cancellationToken);
         return repositories.Select(RepositoryDto.From).ToArray();
     }
+
+    private async Task<IReadOnlyList<ProjectDto>> ProjectRowsAsync(IQueryable<Domain.Projects.Project> source, UserId viewer, CancellationToken cancellationToken)
+    {
+        var rows = await source
+            .OrderBy(p => p.Name)
+            .Select(p => new
+            {
+                p.Id,
+                p.Name,
+                p.Slug,
+                p.CreatedAt,
+                Role = p.Members.Where(m => m.UserId == viewer).Select(m => (ProjectRole?)m.Role).FirstOrDefault(),
+                MemberCount = p.Members.Count,
+                RepositoryCount = context.Repositories.Count(r => r.ProjectId == p.Id),
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(r => new ProjectDto(
+            r.Id.Value,
+            r.Name,
+            r.Slug,
+            r.Role is { } role ? ApiNames.ToApi(role) : "SUPER_ADMIN",
+            r.MemberCount,
+            r.RepositoryCount,
+            r.CreatedAt)).ToArray();
+    }
+}
+
+internal sealed class UserQueries(DevAgentDbContext context) : IUserQueries
+{
+    public async Task<PagedResult<UserAdminDto>> ListAsync(string? search, PageRequest page, CancellationToken cancellationToken)
+    {
+        var query = context.Users.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var escaped = search.Replace("\\", "\\\\", StringComparison.Ordinal)
+                .Replace("%", "\\%", StringComparison.Ordinal)
+                .Replace("_", "\\_", StringComparison.Ordinal);
+            var pattern = $"%{escaped}%";
+            query = query.Where(u => EF.Functions.ILike(u.Email, pattern, "\\") || EF.Functions.ILike(u.DisplayName, pattern, "\\"));
+        }
+
+        var total = await query.LongCountAsync(cancellationToken);
+        var items = await Project(query.OrderBy(u => u.Email).Skip(page.Skip).Take(page.PageSize)).ToListAsync(cancellationToken);
+        return new PagedResult<UserAdminDto>(items.Select(Map).ToArray(), page.Page, page.PageSize, total);
+    }
+
+    public async Task<UserAdminDto?> GetAsync(UserId userId, CancellationToken cancellationToken)
+    {
+        var row = await Project(context.Users.AsNoTracking().Where(u => u.Id == userId)).SingleOrDefaultAsync(cancellationToken);
+        return row is null ? null : Map(row);
+    }
+
+    private IQueryable<UserRow> Project(IQueryable<Domain.Users.User> source) => source.Select(u => new UserRow(
+        u.Id,
+        u.Email,
+        u.DisplayName,
+        u.SystemRole,
+        u.IsActive,
+        u.MustChangePassword,
+        u.LockoutEndsAt,
+        u.LastLoginAt,
+        context.Projects.Count(p => p.Members.Any(m => m.UserId == u.Id)),
+        u.CreatedAt));
+
+    private static UserAdminDto Map(UserRow r) => new(
+        r.Id.Value,
+        r.Email,
+        r.DisplayName,
+        ApiNames.ToApi(r.Role),
+        r.IsActive,
+        r.MustChangePassword,
+        r.LockedUntil is { } until && until > DateTimeOffset.UtcNow ? until : null,
+        r.LastLoginAt,
+        r.ProjectCount,
+        r.CreatedAt);
+
+    private sealed record UserRow(
+        UserId Id,
+        string Email,
+        string DisplayName,
+        Domain.Users.SystemRole Role,
+        bool IsActive,
+        bool MustChangePassword,
+        DateTimeOffset? LockedUntil,
+        DateTimeOffset? LastLoginAt,
+        int ProjectCount,
+        DateTimeOffset CreatedAt);
 }
 
 internal sealed class TaskQueries(DevAgentDbContext context) : ITaskQueries

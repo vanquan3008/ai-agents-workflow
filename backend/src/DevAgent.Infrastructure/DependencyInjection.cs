@@ -5,6 +5,7 @@ using DevAgent.Application.Abstractions.Messaging;
 using DevAgent.Application.Abstractions.Persistence;
 using DevAgent.Application.Abstractions.Realtime;
 using DevAgent.Application.Abstractions.Security;
+using DevAgent.Application.Features.Admin;
 using DevAgent.Application.Features.Approvals;
 using DevAgent.Application.Features.Executions;
 using DevAgent.Application.Features.Projects;
@@ -46,6 +47,7 @@ public static class DependencyInjection
         services.AddIntegrations(configuration);
 
         services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddHealthChecks().AddDbContextCheck<DevAgentDbContext>("postgres", tags: ["ready"]);
         return services;
     }
@@ -87,6 +89,8 @@ public static class DependencyInjection
         services.AddOptions<SecurityOptions>().Bind(configuration.GetSection(SecurityOptions.SectionName)).ValidateOnStart();
         services.AddOptions<ObservabilityOptions>().Bind(configuration.GetSection(ObservabilityOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<AgentLimitsOptions>().Bind(configuration.GetSection(AgentLimitsOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<AuthPolicyOptions>().Bind(configuration.GetSection(AuthPolicyOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<BootstrapOptions>().Bind(configuration.GetSection(BootstrapOptions.SectionName)).ValidateDataAnnotations();
         services.AddOptions<PublicUrlsOptions>().Bind(configuration.GetSection(PublicUrlsOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
 
         services.AddSingleton<IValidateOptions<AiOptions>, AiOptionsValidator>();
@@ -124,6 +128,9 @@ public static class DependencyInjection
         services.AddScoped<IExecutionRepository, ExecutionRepository>();
         services.AddScoped<IApprovalRepository, ApprovalRepository>();
         services.AddScoped<IAgentInstanceRepository, AgentInstanceRepository>();
+        services.AddScoped<IWorkflowRevisionRepository, WorkflowRevisionRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IUserQueries, UserQueries>();
         services.AddScoped<IAuditLog, AuditLog>();
 
         services.AddScoped<IProjectQueries, ProjectQueries>();
@@ -173,13 +180,14 @@ public static class DependencyInjection
         var discord = configuration.GetSection(DiscordOptions.SectionName).Get<DiscordOptions>() ?? new();
         if (discord.Enabled)
         {
+            // Không thêm retry trong HttpClient: thử lại do hàng đợi bền vững đảm nhận (backoff, Retry-After, dead-letter).
             services.AddHttpClient<IChatNotifier, DiscordChatNotifier>((sp, http) =>
-                {
-                    var options = sp.GetRequiredService<IOptions<DiscordOptions>>().Value;
-                    http.BaseAddress = new Uri(options.ApiBaseUrl.TrimEnd('/') + "/");
-                    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", options.BotToken);
-                })
-                .AddStandardResilienceHandler();
+            {
+                var options = sp.GetRequiredService<IOptions<DiscordOptions>>().Value;
+                http.BaseAddress = new Uri(options.ApiBaseUrl.TrimEnd('/') + "/");
+                http.Timeout = TimeSpan.FromSeconds(15);
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", options.BotToken);
+            });
         }
         else
         {

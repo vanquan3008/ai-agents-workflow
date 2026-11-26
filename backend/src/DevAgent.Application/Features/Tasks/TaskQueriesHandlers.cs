@@ -9,7 +9,7 @@ namespace DevAgent.Application.Features.Tasks;
 
 public sealed record ListTasksQuery(Guid? ProjectId, Guid? RepositoryId, string? Status, string? Search, int? Page, int? PageSize);
 
-internal sealed class ListTasksHandler(ProjectAccess access, IProjectQueries projectQueries, ITaskQueries taskQueries)
+internal sealed class ListTasksHandler(ProjectAccess access, ITaskQueries taskQueries)
     : IQueryHandler<ListTasksQuery, PagedResult<TaskSummaryDto>>
 {
     public async Task<Result<PagedResult<TaskSummaryDto>>> HandleAsync(ListTasksQuery query, CancellationToken cancellationToken)
@@ -39,14 +39,14 @@ internal sealed class ListTasksHandler(ProjectAccess access, IProjectQueries pro
         }
         else
         {
-            var user = access.RequireAuthenticated();
-            if (user.IsFailure)
+            // Không truyền project: chỉ project người dùng được xem (Super Admin: mọi project).
+            var allowed = await access.ProjectsWithPermissionAsync(ProjectPermission.ViewTasks, cancellationToken);
+            if (allowed.IsFailure)
             {
-                return user.Error!;
+                return allowed.Error!;
             }
 
-            // Không truyền project: chỉ trả task thuộc các project người dùng được xem.
-            projectIds = await projectQueries.ListProjectIdsWithPermissionAsync(user.Value, ProjectPermission.ViewTasks, cancellationToken);
+            projectIds = allowed.Value;
         }
 
         var filter = new TaskListFilter(status, query.RepositoryId is { } r ? new RepositoryId(r) : null, query.Search?.Trim());

@@ -27,7 +27,7 @@ public static class AgentTaskStateMachine
 {
     private static readonly Dictionary<AgentTaskStatus, AgentTaskStatus[]> Allowed = new()
     {
-        [AgentTaskStatus.Pending] = [AgentTaskStatus.Planning, AgentTaskStatus.Cancelled],
+        [AgentTaskStatus.Pending] = [AgentTaskStatus.Planning, AgentTaskStatus.Failed, AgentTaskStatus.Blocked, AgentTaskStatus.Cancelled],
         [AgentTaskStatus.Planning] =
         [
             AgentTaskStatus.NeedsClarification, AgentTaskStatus.WaitingForApproval, AgentTaskStatus.InProgress,

@@ -8,26 +8,47 @@ using Microsoft.Extensions.Logging;
 namespace DevAgent.Infrastructure.Events;
 
 /// <summary>
-/// Phát domain event tới các <see cref="IDomainEventHandler{TEvent}"/> trong cùng scope, sau khi commit.
-/// Lỗi handler chỉ được log: dữ liệu đã lưu là nguồn sự thật, client đọc bù từ lịch sử.
+/// Phát domain event tới handler trong cùng scope:
+/// - <see cref="ITransactionalDomainEventHandler{TEvent}"/> trước commit; lỗi làm hỏng cả giao dịch (outbox).
+/// - <see cref="IDomainEventHandler{TEvent}"/> sau commit; lỗi chỉ được log vì dữ liệu đã lưu là nguồn sự thật.
 /// </summary>
 internal sealed partial class DomainEventDispatcher(IServiceProvider services, ILogger<DomainEventDispatcher> logger)
 {
-    private static readonly ConcurrentDictionary<Type, MethodInfo> DispatchMethods = new();
+    private static readonly ConcurrentDictionary<(Type, bool), MethodInfo> Methods = new();
 
-    private static readonly MethodInfo DispatchTypedMethod =
-        typeof(DomainEventDispatcher).GetMethod(nameof(DispatchTypedAsync), BindingFlags.NonPublic | BindingFlags.Instance)!;
+    private static readonly MethodInfo TransactionalMethod =
+        typeof(DomainEventDispatcher).GetMethod(nameof(DispatchTransactionalTypedAsync), BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-    public async Task DispatchAsync(IReadOnlyCollection<IDomainEvent> events, CancellationToken cancellationToken)
+    private static readonly MethodInfo AfterCommitMethod =
+        typeof(DomainEventDispatcher).GetMethod(nameof(DispatchAfterCommitTypedAsync), BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    public Task DispatchTransactionalAsync(IReadOnlyCollection<IDomainEvent> events, CancellationToken cancellationToken) =>
+        DispatchAsync(events, transactional: true, cancellationToken);
+
+    public Task DispatchAfterCommitAsync(IReadOnlyCollection<IDomainEvent> events, CancellationToken cancellationToken) =>
+        DispatchAsync(events, transactional: false, cancellationToken);
+
+    private async Task DispatchAsync(IReadOnlyCollection<IDomainEvent> events, bool transactional, CancellationToken cancellationToken)
     {
         foreach (var domainEvent in events)
         {
-            var method = DispatchMethods.GetOrAdd(domainEvent.GetType(), t => DispatchTypedMethod.MakeGenericMethod(t));
+            var method = Methods.GetOrAdd(
+                (domainEvent.GetType(), transactional),
+                key => (key.Item2 ? TransactionalMethod : AfterCommitMethod).MakeGenericMethod(key.Item1));
             await (Task)method.Invoke(this, [domainEvent, cancellationToken])!;
         }
     }
 
-    private async Task DispatchTypedAsync<TEvent>(TEvent domainEvent, CancellationToken cancellationToken)
+    private async Task DispatchTransactionalTypedAsync<TEvent>(TEvent domainEvent, CancellationToken cancellationToken)
+        where TEvent : IDomainEvent
+    {
+        foreach (var handler in services.GetServices<ITransactionalDomainEventHandler<TEvent>>())
+        {
+            await handler.HandleAsync(domainEvent, cancellationToken);
+        }
+    }
+
+    private async Task DispatchAfterCommitTypedAsync<TEvent>(TEvent domainEvent, CancellationToken cancellationToken)
         where TEvent : IDomainEvent
     {
         foreach (var handler in services.GetServices<IDomainEventHandler<TEvent>>())

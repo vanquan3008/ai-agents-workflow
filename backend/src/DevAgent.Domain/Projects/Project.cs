@@ -82,6 +82,20 @@ public sealed partial class Project : AggregateRoot<ProjectId>
         existing.ChangeRole(role);
     }
 
+    public void RemoveMember(UserId userId)
+    {
+        var existing = _members.SingleOrDefault(m => m.UserId == userId)
+            ?? throw new DomainException("project.member_not_found", "Người dùng không phải thành viên project.");
+        if (existing.Role == ProjectRole.Owner && _members.Count(m => m.Role == ProjectRole.Owner) == 1)
+        {
+            throw new DomainException("project.last_owner", "Project phải còn ít nhất một Owner.");
+        }
+
+        _members.Remove(existing);
+    }
+
+    public void Rename(string name) => Name = Guard.NotEmpty(name, "name", 200);
+
     public ProjectRole? RoleOf(UserId userId) => _members.SingleOrDefault(m => m.UserId == userId)?.Role;
 
     public bool HasPermission(UserId userId, ProjectPermission permission) =>

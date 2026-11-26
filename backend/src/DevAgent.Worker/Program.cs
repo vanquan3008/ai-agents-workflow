@@ -32,6 +32,7 @@ try
     builder.Services.AddSingleton<JobProcessingService>();
     builder.Services.AddHostedService(sp => sp.GetRequiredService<JobProcessingService>());
     builder.Services.AddHostedService<HeartbeatService>();
+    builder.Services.AddHostedService<DeadLetterReconciler>();
     builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(45));
 
     var host = builder.Build();

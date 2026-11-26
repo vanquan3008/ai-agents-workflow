@@ -1,4 +1,6 @@
 using DevAgent.Domain.Common;
+using DevAgent.Domain.Users;
+using DevAgent.Domain.Workflows;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace DevAgent.Infrastructure.Persistence.Converters;
@@ -25,3 +27,7 @@ internal sealed class AgentProfileIdConverter() : ValueConverter<AgentProfileId,
 internal sealed class AgentInstanceIdConverter() : ValueConverter<AgentInstanceId, Guid>(v => v.Value, v => new AgentInstanceId(v));
 
 internal sealed class AuditEntryIdConverter() : ValueConverter<AuditEntryId, Guid>(v => v.Value, v => new AuditEntryId(v));
+
+internal sealed class WorkflowRevisionIdConverter() : ValueConverter<WorkflowRevisionId, Guid>(v => v.Value, v => new WorkflowRevisionId(v));
+
+internal sealed class RefreshTokenIdConverter() : ValueConverter<RefreshTokenId, Guid>(v => v.Value, v => new RefreshTokenId(v));

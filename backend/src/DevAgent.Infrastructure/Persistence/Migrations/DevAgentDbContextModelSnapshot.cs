@@ -320,6 +320,10 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("model");
 
+                    b.Property<int>("ModelCalls")
+                        .HasColumnType("integer")
+                        .HasColumnName("model_calls");
+
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
@@ -459,6 +463,15 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("provider");
 
+                    b.Property<string>("Workflow")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("workflow");
+
+                    b.Property<int>("WorkflowVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("workflow_version");
+
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -553,6 +566,14 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("work_branch");
 
+                    b.Property<string>("Workflow")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("workflow");
+
+                    b.Property<int?>("WorkflowVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("workflow_version");
+
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -582,6 +603,76 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                     b.ToTable("tasks", "devagent");
                 });
 
+            modelBuilder.Entity("DevAgent.Domain.Users.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedByIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("created_by_ip");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("family_id");
+
+                    b.Property<Guid?>("ReplacedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("replaced_by");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("RevokedReason")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("revoked_reason");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("user_agent");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_refresh_tokens");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_refresh_tokens_expires_at");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_refresh_tokens_token_hash");
+
+                    b.HasIndex("FamilyId", "RevokedAt")
+                        .HasDatabaseName("ix_refresh_tokens_family_id_revoked_at");
+
+                    b.HasIndex("UserId", "RevokedAt")
+                        .HasDatabaseName("ix_refresh_tokens_user_id_revoked_at");
+
+                    b.ToTable("refresh_tokens", "devagent");
+                });
+
             modelBuilder.Entity("DevAgent.Domain.Users.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -599,18 +690,110 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                         .HasColumnName("display_name");
 
                     b.Property<string>("Email")
+                        .IsRequired()
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)")
                         .HasColumnName("email");
+
+                    b.Property<int>("FailedLoginCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed_login_count");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<DateTimeOffset?>("LastLoginAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_login_at");
+
+                    b.Property<DateTimeOffset?>("LockoutEndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lockout_ends_at");
+
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("boolean")
+                        .HasColumnName("must_change_password");
+
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("security_stamp");
+
+                    b.Property<string>("SystemRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("system_role");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id")
                         .HasName("pk_users");
 
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasDatabaseName("ix_users_email");
+
+                    b.HasIndex("SystemRole", "IsActive")
+                        .HasDatabaseName("ix_users_system_role_is_active");
+
                     b.ToTable("users", "devagent");
+                });
+
+            modelBuilder.Entity("DevAgent.Domain.Workflows.WorkflowRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<Guid>("ChangedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("changed_by");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("comment");
+
+                    b.Property<string>("Definition")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("definition");
+
+                    b.Property<Guid>("RepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("repository_id");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_workflow_revisions");
+
+                    b.HasIndex("ChangedBy")
+                        .HasDatabaseName("ix_workflow_revisions_changed_by");
+
+                    b.HasIndex("RepositoryId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("ix_workflow_revisions_repository_id_version");
+
+                    b.ToTable("workflow_revisions", "devagent");
                 });
 
             modelBuilder.Entity("DevAgent.Infrastructure.Persistence.Jobs.JobRecord", b =>
@@ -635,6 +818,10 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeadLetteredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dead_lettered_at");
 
                     b.Property<string>("DeduplicationKey")
                         .IsRequired()
@@ -665,6 +852,10 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("payload");
 
+                    b.Property<DateTimeOffset?>("ReconciledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reconciled_at");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -687,6 +878,10 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                     b.HasIndex("AvailableAt")
                         .HasDatabaseName("ix_jobs_queued_available_at")
                         .HasFilter("status = 'Queued'");
+
+                    b.HasIndex("DeadLetteredAt")
+                        .HasDatabaseName("ix_jobs_unreconciled_dead_letters")
+                        .HasFilter("status = 'DeadLetter' AND reconciled_at IS NULL");
 
                     b.HasIndex("DeduplicationKey")
                         .IsUnique()
@@ -1107,6 +1302,16 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                     b.Navigation("Transitions");
                 });
 
+            modelBuilder.Entity("DevAgent.Domain.Users.RefreshToken", b =>
+                {
+                    b.HasOne("DevAgent.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_refresh_tokens_users_user_id");
+                });
+
             modelBuilder.Entity("DevAgent.Domain.Users.User", b =>
                 {
                     b.OwnsMany("DevAgent.Domain.Users.ExternalIdentity", "Identities", b1 =>
@@ -1145,6 +1350,23 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Identities");
+                });
+
+            modelBuilder.Entity("DevAgent.Domain.Workflows.WorkflowRevision", b =>
+                {
+                    b.HasOne("DevAgent.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_workflow_revisions_users_changed_by");
+
+                    b.HasOne("DevAgent.Domain.Repositories.CodeRepository", null)
+                        .WithMany()
+                        .HasForeignKey("RepositoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_workflow_revisions_code_repositories_repository_id");
                 });
 #pragma warning restore 612, 618
         }

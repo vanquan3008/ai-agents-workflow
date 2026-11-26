@@ -1,5 +1,6 @@
 using DevAgent.Domain.Common;
 using DevAgent.Domain.Policies;
+using DevAgent.Domain.Workflows;
 
 namespace DevAgent.Domain.Repositories;
 
@@ -21,6 +22,7 @@ public sealed class CodeRepository : AggregateRoot<RepositoryId>
         Name = string.Empty;
         DefaultBranch = string.Empty;
         Policy = null!;
+        Workflow = WorkflowDefinition.Default;
     }
 
     private CodeRepository(
@@ -41,6 +43,8 @@ public sealed class CodeRepository : AggregateRoot<RepositoryId>
         Name = name;
         DefaultBranch = defaultBranch;
         Policy = policy;
+        Workflow = WorkflowDefinition.Default;
+        WorkflowVersion = 0;
         CreatedAt = createdAt;
     }
 
@@ -59,6 +63,11 @@ public sealed class CodeRepository : AggregateRoot<RepositoryId>
     public string DefaultBranch { get; private set; }
 
     public RepositoryPolicy Policy { get; private set; }
+
+    /// <summary>Quy trình hiện hành. Phiên bản 0 là quy trình mặc định của hệ thống.</summary>
+    public WorkflowDefinition Workflow { get; private set; }
+
+    public int WorkflowVersion { get; private set; }
 
     public bool IsActive { get; private set; } = true;
 
@@ -99,6 +108,37 @@ public sealed class CodeRepository : AggregateRoot<RepositoryId>
         }
 
         Policy = policy;
+    }
+
+    /// <summary>
+    /// Đổi quy trình với kiểm tra phiên bản (optimistic): người sửa phải dựa trên phiên bản hiện hành,
+    /// tránh hai người ghi đè nhau. Trả về bản ghi lịch sử để lưu append-only.
+    /// </summary>
+    public WorkflowRevision UpdateWorkflow(WorkflowDefinition definition, int expectedVersion, UserId changedBy, string? comment, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        if (expectedVersion != WorkflowVersion)
+        {
+            throw new DomainException(
+                "workflow.version_conflict",
+                $"Quy trình đã được đổi sang phiên bản {WorkflowVersion}; bạn đang sửa phiên bản {expectedVersion}.");
+        }
+
+        if (definition == Workflow)
+        {
+            throw new DomainException("workflow.unchanged", "Quy trình không có thay đổi nào.");
+        }
+
+        Workflow = definition;
+        WorkflowVersion++;
+        return new WorkflowRevision(
+            WorkflowRevisionId.New(),
+            Id,
+            WorkflowVersion,
+            definition,
+            Guard.NotDefault(changedBy, "changed_by"),
+            Guard.Optional(comment, "comment", 1000),
+            Guard.Utc(now, "changed_at"));
     }
 
     public void Deactivate() => IsActive = false;
