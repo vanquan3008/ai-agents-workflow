@@ -62,11 +62,11 @@ services:
     environment:
       <<: *backend-env
       Database__ApplyMigrationsOnStartup: ${APPLY_MIGRATIONS:-true}
-      Database__SeedDevelopmentData: ${SEED_DEV_DATA:-true}
-      Auth__Development__Enabled: ${DEV_AUTH_ENABLED:-true}
-      Auth__Development__DefaultUserId: ${DEV_AUTH_DEFAULT_USER:-0193a1c0-0000-7000-8000-000000000001}
-      Auth__Jwt__Authority: ${OIDC_AUTHORITY:-}
-      Auth__Jwt__Audience: ${OIDC_AUDIENCE:-devagent-api}
+      Auth__Jwt__SigningKey: ${AUTH_JWT_SIGNING_KEY:?Đặt AUTH_JWT_SIGNING_KEY trong .env}
+      Auth__Jwt__Audience: devagent-api
+      Auth__RefreshCookie__Secure: ${AUTH_COOKIE_SECURE:-false}
+      Bootstrap__SuperAdmin__Email: ${BOOTSTRAP_ADMIN_EMAIL:-admin@devagent.local}
+      Bootstrap__SuperAdmin__Password: ${BOOTSTRAP_ADMIN_PASSWORD:?Đặt BOOTSTRAP_ADMIN_PASSWORD trong .env}
       Cors__AllowedOrigins__0: ${PUBLIC_DASHBOARD_URL:-http://localhost:8080}
       Cors__AllowedOrigins__1: http://localhost:5173
     ports:
@@ -93,11 +93,13 @@ services:
   web:
     build:
       context: ./frontend
-      args:
-        VITE_AUTH_MODE: ${WEB_AUTH_MODE:-development}
-        VITE_DEV_USER_ID: ${DEV_AUTH_DEFAULT_USER:-0193a1c0-0000-7000-8000-000000000001}
     image: devagent-web:local
     restart: unless-stopped
+    # Cấu hình runtime: container sinh /config.js từ các biến này lúc khởi động (cùng image cho mọi môi trường).
+    environment:
+      DEVAGENT_ENVIRONMENT: ${APP_ENVIRONMENT:-Development}
+      DEVAGENT_API_BASE_URL: ""
+      DEVAGENT_APP_NAME: DevAgent
     ports:
       - "${WEB_PORT:-8080}:8080"
     depends_on:
