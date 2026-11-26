@@ -30,14 +30,14 @@ public sealed class PersistenceTests(ApiFactory factory) : IClassFixture<ApiFact
             var db = scope.ServiceProvider.GetRequiredService<DevAgentDbContext>();
             var repo = await db.Repositories.FirstAsync(ct);
             var task = AgentTask.Create(repo.ProjectId, repo.Id, "t", "d", new TaskSource(TaskChannel.Api, "ref-1"),
-                new IdempotencyKey($"persist-{Guid.NewGuid():N}"), DevelopmentSeedData.OwnerUserId, now);
+                new IdempotencyKey($"persist-{Guid.NewGuid():N}"), TestData.OwnerUserId, now);
             scope.ServiceProvider.GetRequiredService<ITaskRepository>().Add(task);
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(ct);
             taskId = task.Id;
         }
 
         // Mỗi bước dùng scope mới, giống Worker xử lý từng job.
-        await Mutate(t => t.StartPlanning(Sha, "devagent/task-x", Actor.System, now));
+        await Mutate(t => t.StartPlanning(Sha, "devagent/task-x", Domain.Workflows.WorkflowDefinition.Default, 0, Actor.System, now));
         await Mutate(t =>
         {
             t.AttachPlan("plan", ["s1"], ["c1"], ["r1"], ["src/a.cs"],
@@ -86,7 +86,7 @@ public sealed class PersistenceTests(ApiFactory factory) : IClassFixture<ApiFact
             var db = scope.ServiceProvider.GetRequiredService<DevAgentDbContext>();
             var repo = await db.Repositories.FirstAsync(ct);
             var task = AgentTask.Create(repo.ProjectId, repo.Id, "t", "d", new TaskSource(TaskChannel.Api, null),
-                new IdempotencyKey($"exec-{Guid.NewGuid():N}"), DevelopmentSeedData.OwnerUserId, now);
+                new IdempotencyKey($"exec-{Guid.NewGuid():N}"), TestData.OwnerUserId, now);
             db.Tasks.Add(task);
             var execution = AgentExecution.Start(task.Id, AgentStep.Planner, 1, null, "m", "w", now);
             db.Executions.Add(execution);
@@ -98,7 +98,7 @@ public sealed class PersistenceTests(ApiFactory factory) : IClassFixture<ApiFact
         {
             var executions = scope.ServiceProvider.GetRequiredService<IExecutionRepository>();
             var execution = (await executions.GetByIdAsync(executionId, ct))!;
-            execution.RecordUsage(new TokenUsage(100, 20, 5, 0.0123m));
+            execution.RecordModelCall(new TokenUsage(100, 20, 5, 0.0123m));
             execution.BeginTool("repo.read_file", "{\"path\":\"src/a.cs\"}", now).Succeed("{\"ok\":true}", 0, now);
             execution.Succeed(now);
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(ct);

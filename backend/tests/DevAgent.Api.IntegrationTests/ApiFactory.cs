@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
-using DevAgent.Api.Auth;
-using DevAgent.Infrastructure.Persistence;
+using DevAgent.Application.Abstractions.Persistence;
+using DevAgent.Application.Abstractions.Security;
+using DevAgent.Domain.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,9 +10,8 @@ using Testcontainers.PostgreSql;
 namespace DevAgent.Api.IntegrationTests;
 
 /// <summary>
-/// Chạy API thật trên PostgreSQL thật (Testcontainers) với môi trường Testing:
-/// AI và GitHub dùng bản giả lập xác định, xác thực bằng header Development.
-/// Cần Docker; nếu không có Docker, test được bỏ qua (CI luôn có Docker).
+/// Chạy API thật trên PostgreSQL thật (Testcontainers) với môi trường Testing: AI và GitHub dùng bản giả lập xác định.
+/// Xác thực bằng JWT thật do chính ứng dụng ký. Cần Docker; không có Docker thì test được bỏ qua (CI luôn có Docker).
 /// </summary>
 public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
@@ -48,20 +48,20 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         }
     }
 
+    /// <summary>Client mang access token hợp lệ của người dùng (ký bằng dịch vụ token của ứng dụng).</summary>
     public HttpClient ClientFor(Guid userId)
     {
+        using var scope = Services.CreateScope();
+        var user = scope.ServiceProvider.GetRequiredService<IUserRepository>().GetByIdAsync(new UserId(userId), CancellationToken.None).GetAwaiter().GetResult()
+            ?? throw new InvalidOperationException($"Không có người dùng {userId}; gọi SeedAsync trước.");
+        var token = scope.ServiceProvider.GetRequiredService<ITokenService>().CreateAccessToken(user);
         var client = CreateClient();
-        client.DefaultRequestHeaders.Add(DevelopmentAuthenticationHandler.HeaderName, userId.ToString());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return client;
     }
 
-    public async Task SeedAsync()
-    {
-        using var scope = Services.CreateScope();
-        var initializer = ActivatorUtilities.CreateInstance<DevelopmentDataSeeder>(scope.ServiceProvider);
-        await initializer.SeedAsync(CancellationToken.None);
-    }
+    public Task SeedAsync() => TestData.SeedAsync(Services, CancellationToken.None);
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -77,5 +77,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         // UseSetting (không phải ConfigureAppConfiguration) để giá trị có hiệu lực ngay khi Program.cs đọc cấu hình.
         builder.UseSetting("ConnectionStrings:Postgres", _postgres?.GetConnectionString() ?? "Host=localhost;Database=unused");
         builder.UseSetting("Database:ApplyMigrationsOnStartup", DockerAvailable ? "true" : "false");
+        builder.UseSetting("Bootstrap:SuperAdmin:Email", TestData.SuperAdminEmail);
+        builder.UseSetting("Bootstrap:SuperAdmin:Password", TestData.SuperAdminPassword);
     }
 }

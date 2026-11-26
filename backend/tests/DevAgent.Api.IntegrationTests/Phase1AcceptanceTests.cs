@@ -16,17 +16,18 @@ namespace DevAgent.Api.IntegrationTests;
 /// </summary>
 public sealed class Phase1AcceptanceTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
-    private static readonly Guid Owner = DevelopmentSeedData.OwnerUserId.Value;
-    private static readonly Guid Outsider = DevelopmentSeedData.OutsiderUserId.Value;
+    private static readonly Guid Owner = TestData.OwnerUserId.Value;
+    private static readonly Guid Outsider = TestData.OutsiderUserId.Value;
 
     private async Task<(HttpClient Client, Guid RepositoryId)> ArrangeAsync()
     {
         Assert.SkipUnless(factory.DockerAvailable, "Cần Docker để chạy PostgreSQL bằng Testcontainers.");
-        var client = factory.ClientFor(Owner);
+        _ = factory.CreateClient();
         await factory.SeedAsync();
+        var client = factory.ClientFor(Owner);
 
         var projects = await client.GetFromJsonAsync<JsonElement>("/api/v1/projects", TestContext.Current.CancellationToken);
-        var projectId = projects.EnumerateArray().Single(p => p.GetProperty("slug").GetString() == DevelopmentSeedData.ProjectSlug).GetProperty("id").GetGuid();
+        var projectId = projects.EnumerateArray().Single(p => p.GetProperty("slug").GetString() == TestData.ProjectSlug).GetProperty("id").GetGuid();
         var repositories = await client.GetFromJsonAsync<JsonElement>($"/api/v1/projects/{projectId}/repositories", TestContext.Current.CancellationToken);
         return (client, repositories[0].GetProperty("id").GetGuid());
     }
@@ -156,7 +157,7 @@ public sealed class Phase1AcceptanceTests(ApiFactory factory) : IClassFixture<Ap
         async Task<IReadOnlyList<LeasedJob>> LeaseAs(string worker)
         {
             using var scope = factory.Services.CreateScope();
-            return await scope.ServiceProvider.GetRequiredService<IJobStore>().LeaseAsync(worker, 10, TimeSpan.FromMinutes(1), 100, ct);
+            return await scope.ServiceProvider.GetRequiredService<IJobStore>().LeaseAsync(worker, 10, TimeSpan.FromMinutes(1), null, ct);
         }
 
         var results = await Task.WhenAll(LeaseAs("worker-a"), LeaseAs("worker-b"));

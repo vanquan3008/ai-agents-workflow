@@ -4,6 +4,7 @@ using DevAgent.Application.Common;
 using DevAgent.Application.Features.Approvals;
 using DevAgent.Application.Orchestration;
 using DevAgent.Application.Orchestration.Agents;
+using DevAgent.Application.Orchestration.Steps;
 using DevAgent.Application.Tests.Fakes;
 using DevAgent.Domain.Approvals;
 using DevAgent.Domain.Common;
@@ -31,13 +32,18 @@ public sealed class AgentOrchestratorTests
         affected_paths = paths,
     });
 
-    private AgentOrchestrator Orchestrator(IModelClient model) => new(
-        _fx.Store, _fx.Store, _fx.Store, _fx.Store, _fx.Store, _fx.Store,
-        new FixedSourceControl(),
-        new PlannerAgent(model),
-        MsOptions.Create(_fx.Limits),
-        _fx.Clock,
-        NullLogger<AgentOrchestrator>.Instance);
+    private AgentOrchestrator Orchestrator(IModelClient model)
+    {
+        var limits = MsOptions.Create(_fx.Limits);
+        var source = new FixedSourceControl();
+        IWorkflowStep[] steps =
+        [
+            new StartTaskStep(source, _fx.Store, _fx.Store, _fx.Clock),
+            new PlanningStep(_fx.Store, _fx.Store, _fx.Store, _fx.Store, source, new PlannerAgent(model), new BudgetGuard(_fx.Store, model, limits), limits, _fx.Clock),
+            new PendingImplementationStep(_fx.Store, _fx.Clock),
+        ];
+        return new AgentOrchestrator(_fx.Store, _fx.Store, _fx.Store, _fx.Store, steps, limits, _fx.Clock, NullLogger<AgentOrchestrator>.Instance);
+    }
 
     private AgentTask NewTask()
     {
@@ -122,7 +128,7 @@ public sealed class AgentOrchestratorTests
         _fx.ActAsNobody();
         var handler = new DecideApprovalHandler(_fx.Access, _fx.Store, _fx.Store, _fx.Store, _fx.Store, _fx.Store, _fx.Clock);
         var task = NewTask();
-        task.StartPlanning(FixedSourceControl.HeadSha, "b", Actor.System, _fx.Clock.GetUtcNow());
+        task.StartPlanning(FixedSourceControl.HeadSha, "b", Domain.Workflows.WorkflowDefinition.Default, 0, Actor.System, _fx.Clock.GetUtcNow());
         var plan = task.AttachPlan("s", ["a"], ["c"], [], ["src/Auth/x.cs"],
             new Domain.Policies.PolicyDecision(Domain.Policies.PolicyOutcome.RequiresApproval, Domain.Policies.SensitiveArea.Authentication, 1, ["auth"]),
             _fx.Clock.GetUtcNow());
@@ -145,9 +151,11 @@ public sealed class AgentOrchestratorTests
         await orchestrator.AdvanceAsync(task.Id, "w1", CancellationToken.None);
 
         var spent = AgentExecution.Start(task.Id, AgentStep.Coding, 1, null, "m", "w0", _fx.Clock.GetUtcNow());
-        spent.RecordUsage(new TokenUsage(1, 1, 0, _fx.Limits.MaxCostUsdPerTask));
+        spent.RecordModelCall(new TokenUsage(1, 1, 0, _fx.Limits.MaxCostUsdPerTask));
         _fx.Store.Executions.Add(spent);
 
+        // Ngân sách chỉ có ý nghĩa với model có giá; giả lập model tính phí.
+        orchestrator = Orchestrator(model = new ScriptedModelClient(Plan("src/a.cs")) { Price = _ => new ModelPrice(4m, 20m, 0.2m) });
         await orchestrator.AdvanceAsync(task.Id, "w1", CancellationToken.None);
 
         task.Status.ShouldBe(AgentTaskStatus.Blocked);

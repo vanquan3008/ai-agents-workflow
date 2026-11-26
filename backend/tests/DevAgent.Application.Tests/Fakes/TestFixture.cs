@@ -16,9 +16,9 @@ internal sealed class TestFixture
     public TestFixture()
     {
         var now = Clock.GetUtcNow();
-        Owner = User.Create("Owner", null, now);
-        Requester = User.Create("Requester", null, now);
-        Outsider = User.Create("Outsider", null, now);
+        Owner = User.Create("owner@test.local", "Owner", SystemRole.User, now);
+        Requester = User.Create("requester@test.local", "Requester", SystemRole.User, now);
+        Outsider = User.Create("outsider@test.local", "Outsider", SystemRole.User, now);
         Store.Users.AddRange([Owner, Requester, Outsider]);
 
         Project = Project.Create("Pilot", "pilot", Owner.Id, now);
@@ -49,31 +49,41 @@ internal sealed class TestFixture
 
     public AgentLimitsOptions Limits { get; } = new();
 
-    public ProjectAccess Access => new(CurrentUser, Store, Store, Store, Clock);
+    public ProjectAccess Access => new(CurrentUser, Store, Store, Store, Store, Store, Clock);
 
     public void ActAs(User user) => CurrentUser.UserId = user.Id;
 
     public void ActAsNobody() => CurrentUser.UserId = null;
 }
 
-/// <summary>Model giả trả văn bản cố định, đếm số lần gọi.</summary>
+/// <summary>Model giả trả văn bản cố định, đếm số lần gọi và lưu request cuối để kiểm tra trần đầu ra/model.</summary>
 internal sealed class ScriptedModelClient(params string[] responses) : IModelClient
 {
     private int _index;
 
     public int Calls => _index;
 
+    public ModelRequest? LastRequest { get; private set; }
+
     public ModelStopReason StopReason { get; init; } = ModelStopReason.Completed;
+
+    /// <summary>Đơn giá trả về; null mô phỏng model chưa cấu hình giá.</summary>
+    public Func<string, ModelPrice?> Price { get; init; } = _ => ModelPrice.Free;
+
+    public decimal CostPerCall { get; init; } = 0.01m;
 
     public string ProviderName => "scripted";
 
     public string ResolveModel(string purpose) => "scripted-model";
 
+    public ModelPrice? GetPrice(string model) => Price(model);
+
     public Task<ModelResponse> CompleteAsync(ModelRequest request, CancellationToken cancellationToken)
     {
+        LastRequest = request;
         var text = responses[Math.Min(_index, responses.Length - 1)];
         _index++;
-        return Task.FromResult(new ModelResponse(text, StopReason, null, new ModelUsage(1000, 200, 0, 0.01m), "scripted-model"));
+        return Task.FromResult(new ModelResponse(text, StopReason, null, new ModelUsage(1000, 200, 0, CostPerCall), request.ModelOverride ?? "scripted-model"));
     }
 }
 

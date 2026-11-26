@@ -13,13 +13,14 @@ using DevAgent.Domain.Projects;
 using DevAgent.Domain.Repositories;
 using DevAgent.Domain.Tasks;
 using DevAgent.Domain.Users;
+using DevAgent.Domain.Workflows;
 
 namespace DevAgent.Application.Tests.Fakes;
 
 /// <summary>Kho dữ liệu trong bộ nhớ hiện thực các port của Application, đủ để kiểm thử use case mà không cần DB.</summary>
 internal sealed class InMemoryStore :
     IUnitOfWork, IUserRepository, IProjectRepository, ICodeRepositoryRepository, ITaskRepository,
-    IExecutionRepository, IApprovalRepository, IAgentInstanceRepository, IAuditLog, IJobQueue, IProjectQueries
+    IExecutionRepository, IApprovalRepository, IAgentInstanceRepository, IAuditLog, IJobQueue, IProjectQueries, IWorkflowRevisionRepository
 {
     public List<User> Users { get; } = [];
 
@@ -39,6 +40,8 @@ internal sealed class InMemoryStore :
 
     public List<JobRequest> Jobs { get; } = [];
 
+    public List<WorkflowRevision> Revisions { get; } = [];
+
     public int SaveCount { get; private set; }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken)
@@ -51,6 +54,12 @@ internal sealed class InMemoryStore :
 
     public Task<User?> FindByExternalIdentityAsync(IdentityProvider provider, string externalId, CancellationToken cancellationToken) =>
         Task.FromResult(Users.FirstOrDefault(u => u.Identities.Any(i => i.Provider == provider && i.ExternalId == externalId)));
+
+    public Task<User?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken) =>
+        Task.FromResult(Users.FirstOrDefault(u => u.Email == normalizedEmail));
+
+    public Task<int> CountActiveSuperAdminsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(Users.Count(u => u.IsSuperAdmin && u.IsActive));
 
     public void Add(User user) => Users.Add(user);
 
@@ -84,8 +93,19 @@ internal sealed class InMemoryStore :
     public Task<int> CountAttemptsAsync(TaskId taskId, AgentStep step, CancellationToken cancellationToken) =>
         Task.FromResult(Executions.Count(e => e.TaskId == taskId && e.Step == step));
 
-    public Task<TokenUsage> GetTaskUsageAsync(TaskId taskId, CancellationToken cancellationToken) =>
-        Task.FromResult(Executions.Where(e => e.TaskId == taskId).Aggregate(TokenUsage.Zero, (acc, e) => acc.Add(e.Usage)));
+    public Task<int> CountFailuresSinceAsync(TaskId taskId, AgentStep step, DateTimeOffset since, CancellationToken cancellationToken) =>
+        Task.FromResult(Executions.Count(e => e.TaskId == taskId && e.Step == step && e.Status == ExecutionStatus.Failed && e.StartedAt >= since));
+
+    public Task<TaskUsageTotals> GetTaskUsageAsync(TaskId taskId, CancellationToken cancellationToken)
+    {
+        var mine = Executions.Where(e => e.TaskId == taskId).ToList();
+        return Task.FromResult(new TaskUsageTotals(mine.Aggregate(TokenUsage.Zero, (acc, e) => acc.Add(e.Usage)), mine.Sum(e => e.ModelCalls)));
+    }
+
+    public Task<IReadOnlyList<WorkflowRevision>> ListByRepositoryAsync(RepositoryId repositoryId, int limit, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<WorkflowRevision>>(Revisions.Where(r => r.RepositoryId == repositoryId).OrderByDescending(r => r.Version).Take(limit).ToList());
+
+    public void Add(WorkflowRevision revision) => Revisions.Add(revision);
 
     public void Add(AgentExecution execution) => Executions.Add(execution);
 
@@ -116,10 +136,20 @@ internal sealed class InMemoryStore :
     }
 
     public Task<IReadOnlyList<ProjectDto>> ListForUserAsync(UserId userId, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<ProjectDto>>(Projects
-            .Where(p => p.RoleOf(userId) is not null)
-            .Select(p => new ProjectDto(p.Id.Value, p.Name, p.Slug, ApiNames.ToApi(p.RoleOf(userId)!.Value), p.CreatedAt))
-            .ToList());
+        Task.FromResult<IReadOnlyList<ProjectDto>>(Projects.Where(p => p.RoleOf(userId) is not null).Select(p => Dto(p, userId)).ToList());
+
+    public Task<IReadOnlyList<ProjectDto>> ListAllAsync(UserId viewer, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ProjectDto>>(Projects.Select(p => Dto(p, viewer)).ToList());
+
+    public Task<ProjectDto?> GetAsync(ProjectId projectId, UserId viewer, CancellationToken cancellationToken) =>
+        Task.FromResult(Projects.Where(p => p.Id == projectId).Select(p => Dto(p, viewer)).FirstOrDefault());
+
+    public Task<IReadOnlyList<ProjectId>> ListAllProjectIdsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ProjectId>>(Projects.Select(p => p.Id).ToList());
+
+    private ProjectDto Dto(Project p, UserId viewer) => new(
+        p.Id.Value, p.Name, p.Slug, p.RoleOf(viewer) is { } role ? ApiNames.ToApi(role) : "SUPER_ADMIN",
+        p.Members.Count, Repositories.Count(r => r.ProjectId == p.Id), p.CreatedAt);
 
     public Task<IReadOnlyList<ProjectMemberDto>> ListMembersAsync(ProjectId projectId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<ProjectMemberDto>>([]);
