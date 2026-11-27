@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <!-- Worker: background services that lease jobs from the PostgreSQL queue and run the orchestrator. -->
+  <PropertyGroup>
+    <RootNamespace>DevAgent.Worker</RootNamespace>
+    <UserSecretsId>devagent-worker-7c1d0a52-9f43-4b1a-8d0e-3e2f6c9b4a70</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DevAgent.Infrastructure\DevAgent.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DevAgent.Worker.Tests" />
+  </ItemGroup>
+</Project>

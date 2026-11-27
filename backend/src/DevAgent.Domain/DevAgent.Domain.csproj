@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Domain: aggregates, value objects, domain services and repository contracts. No EF, ASP.NET, GitHub, Discord or AI SDK. -->
+  <PropertyGroup>
+    <RootNamespace>DevAgent.Domain</RootNamespace>
+  </PropertyGroup>
+</Project>

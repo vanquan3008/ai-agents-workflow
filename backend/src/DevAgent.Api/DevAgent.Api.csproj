@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Api: HTTP /api/v1, SignalR and authentication. Composition root of the web process. -->
+  <PropertyGroup>
+    <RootNamespace>DevAgent.Api</RootNamespace>
+    <UserSecretsId>devagent-api-2f6b1c1e-5b0e-4d55-9a49-0d6a0b5d8a11</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DevAgent.Infrastructure\DevAgent.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DevAgent.Api.IntegrationTests" />
+  </ItemGroup>
+</Project>

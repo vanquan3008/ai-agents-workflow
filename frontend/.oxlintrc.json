@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "react",
+    "typescript",
+    "oxc",
+    "import",
+    "jsx-a11y"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "jsx-a11y/label-has-associated-control": ["error", { "controlComponents": ["Input", "Textarea"] }],
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css", "@testing-library/jest-dom/vitest"] }],
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true,
+        "allowExportNames": ["useAuth"]
+      }
+    ],
+    "import/no-cycle": "error",
+    "no-underscore-dangle": [
+      "warn",
+      {
+        "allow": [
+          "__DEVAGENT_CONFIG__"
+        ]
+      }
+    ]
+  },
+  "ignorePatterns": [
+    "src/components/ui/**",
+    "src/hooks/use-mobile.ts",
+    "dist/**"
+  ]
+}

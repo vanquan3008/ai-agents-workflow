@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/*.user
+**/TestResults/
+tests/
+**/appsettings.*.local.json
+**/secrets/
+.env
+*.env
