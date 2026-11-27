@@ -35,6 +35,20 @@ public sealed class ProjectAccess(
         string resourceId,
         CancellationToken cancellationToken)
     {
+        var authorization = await AuthorizeAsync(projectId, permission, resourceType, resourceId, cancellationToken);
+        return authorization.IsSuccess ? authorization.Value.UserId : authorization.Error!;
+    }
+
+    /// <summary>
+    /// Like <see cref="RequireAsync"/>, but returns the caller's role so further permissions can be checked in memory.
+    /// </summary>
+    public async Task<Result<ProjectAuthorization>> AuthorizeAsync(
+        ProjectId projectId,
+        ProjectPermission permission,
+        string resourceType,
+        string resourceId,
+        CancellationToken cancellationToken)
+    {
         var user = await CurrentActiveUserAsync(cancellationToken);
         if (user is null)
         {
@@ -47,9 +61,10 @@ public sealed class ProjectAccess(
             return Error.NotFound("project", projectId);
         }
 
-        if (user.IsSuperAdmin || project.HasPermission(user.Id, permission))
+        var authorization = new ProjectAuthorization(user.Id, projectId, user.IsSuperAdmin, project.RoleOf(user.Id));
+        if (authorization.Can(permission))
         {
-            return user.Id;
+            return authorization;
         }
 
         await DenyAsync(

@@ -175,6 +175,13 @@ internal sealed class TaskQueries(DevAgentDbContext context) : ITaskQueries
             query = query.Where(t => t.RepositoryId == repositoryId);
         }
 
+        if (filter.RepositoryIds is { } repositoryIds)
+        {
+            // Translated to repository_id = ANY(@ids) and applied before pagination.
+            var scoped = repositoryIds.ToArray();
+            query = query.Where(t => scoped.Contains(t.RepositoryId));
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var pattern = $"%{EscapeLike(filter.Search)}%";
@@ -307,6 +314,12 @@ internal sealed class TaskQueries(DevAgentDbContext context) : ITaskQueries
             .Select(t => (ProjectId?)t.ProjectId)
             .SingleOrDefaultAsync(cancellationToken);
     }
+
+    public Task<TaskScope?> GetScopeAsync(TaskId taskId, CancellationToken cancellationToken) =>
+        context.Tasks.AsNoTracking()
+            .Where(t => t.Id == taskId)
+            .Select(t => new TaskScope(t.ProjectId, t.RepositoryId))
+            .SingleOrDefaultAsync(cancellationToken);
 
     private static string EscapeLike(string value) =>
         value.Replace("\\", "\\\\", StringComparison.Ordinal)

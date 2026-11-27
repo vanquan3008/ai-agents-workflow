@@ -35,7 +35,7 @@ internal sealed class RemoveProjectMemberHandler(
         }
 
         var now = clock.GetUtcNow();
-        project.RemoveMember(memberId);
+        project.RemoveMember(memberId, now);
         auditLog.Add(AuditEntry.Record(
             Actor.ForUser(actor.Value), "project.member.remove", "project", projectId.ToString(), AuditOutcome.Allowed, now, projectId,
             reason: memberId.ToString()));

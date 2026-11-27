@@ -39,7 +39,7 @@ public static class TestData
         User NewUser(UserId id, string email, string name)
         {
             var user = User.Create(id, email, name, SystemRole.User, now);
-            user.SetPassword(hasher.Hash(Password), mustChange: false);
+            user.SetPassword(hasher.Hash(Password), mustChange: false, now);
             return user;
         }
 

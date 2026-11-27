@@ -1,6 +1,7 @@
-import { GitBranch, Users } from 'lucide-react'
-import { useParams } from 'react-router'
+import { Building2, GitBranch, Users } from 'lucide-react'
+import { Link, useParams } from 'react-router'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { formatNumber } from '@/shared/lib/format'
@@ -36,6 +37,13 @@ export default function ProjectDetailPage() {
         }
         title={project.data.name}
         description={<span className="font-mono">{project.data.slug}</span>}
+        actions={
+          <Button asChild variant="outline" size="sm">
+            <Link to={`/projects/${projectId}/office`}>
+              <Building2 /> Phòng kỹ thuật
+            </Link>
+          </Button>
+        }
       />
 
       <Tabs defaultValue="repositories" className="gap-4">

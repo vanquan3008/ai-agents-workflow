@@ -50,6 +50,19 @@ public sealed class RefreshToken : AggregateRoot<RefreshTokenId>
 
     public bool WasRotated => ReplacedBy is not null;
 
+    /// <summary>
+    /// True when this token was rotated at or after <paramref name="since"/>. A token presented again right after its
+    /// rotation usually comes from a parallel request of the same browser rather than from theft.
+    /// </summary>
+    public bool WasRotatedSince(DateTimeOffset since) => WasRotated && RevokedAt >= since;
+
+    /// <summary>
+    /// True when this token was issued to a client with the given user agent. An unknown user agent never matches, so a
+    /// client that hides it cannot pass as the browser that holds the session.
+    /// </summary>
+    public bool WasIssuedTo(string? userAgent) =>
+        UserAgent is not null && string.Equals(UserAgent, userAgent?.Trim(), StringComparison.Ordinal);
+
     public static RefreshToken Issue(UserId userId, string tokenHash, Guid? familyId, DateTimeOffset now, TimeSpan lifetime, string? ip, string? userAgent)
     {
         if (lifetime <= TimeSpan.Zero)

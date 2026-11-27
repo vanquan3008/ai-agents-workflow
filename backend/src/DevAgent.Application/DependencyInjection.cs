@@ -3,6 +3,7 @@ using DevAgent.Application.Authorization;
 using DevAgent.Application.Features.Admin;
 using DevAgent.Application.Features.Approvals;
 using DevAgent.Application.Features.Auth;
+using DevAgent.Application.Features.Departments;
 using DevAgent.Application.Features.Executions;
 using DevAgent.Application.Features.Notifications;
 using DevAgent.Application.Features.Projects;
@@ -29,6 +30,7 @@ public static class DependencyInjection
             .AddApprovalsModule()
             .AddExecutionsModule()
             .AddWorkflowsModule()
+            .AddDepartmentsModule()
             .AddNotificationsModule()
             .AddUserAdminModule();
     }

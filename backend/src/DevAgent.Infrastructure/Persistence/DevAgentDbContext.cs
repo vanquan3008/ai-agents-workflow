@@ -2,6 +2,8 @@ using DevAgent.Domain.Agents;
 using DevAgent.Domain.Approvals;
 using DevAgent.Domain.Auditing;
 using DevAgent.Domain.Common;
+using DevAgent.Domain.Departments;
+using DevAgent.Domain.Departments.Layout;
 using DevAgent.Domain.Executions;
 using DevAgent.Domain.Projects;
 using DevAgent.Domain.Repositories;
@@ -42,6 +44,10 @@ public sealed class DevAgentDbContext(DbContextOptions<DevAgentDbContext> option
 
     public DbSet<WorkflowRevision> WorkflowRevisions => Set<WorkflowRevision>();
 
+    public DbSet<ItDepartment> Departments => Set<ItDepartment>();
+
+    public DbSet<ItDepartmentRevision> DepartmentRevisions => Set<ItDepartmentRevision>();
+
     public DbSet<JobRecord> Jobs => Set<JobRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -68,6 +74,8 @@ public sealed class DevAgentDbContext(DbContextOptions<DevAgentDbContext> option
         configurationBuilder.Properties<AuditEntryId>().HaveConversion<AuditEntryIdConverter>();
         configurationBuilder.Properties<WorkflowRevisionId>().HaveConversion<WorkflowRevisionIdConverter>();
         configurationBuilder.Properties<RefreshTokenId>().HaveConversion<RefreshTokenIdConverter>();
+        configurationBuilder.Properties<ItDepartmentId>().HaveConversion<ItDepartmentIdConverter>();
+        configurationBuilder.Properties<DepartmentRoomId>().HaveConversion<DepartmentRoomIdConverter>();
         configurationBuilder.Properties<SystemRole>().HaveConversion<string>().HaveMaxLength(20);
 
         // Enums are stored as strings: readable in ad-hoc queries and safe when values are added.
@@ -86,6 +94,9 @@ public sealed class DevAgentDbContext(DbContextOptions<DevAgentDbContext> option
         configurationBuilder.Properties<AgentInstanceStatus>().HaveConversion<string>().HaveMaxLength(20);
         configurationBuilder.Properties<Domain.Policies.PolicyOutcome>().HaveConversion<string>().HaveMaxLength(40);
         configurationBuilder.Properties<JobStatus>().HaveConversion<string>().HaveMaxLength(20);
+        configurationBuilder.Properties<WorkflowStation>().HaveConversion<string>().HaveMaxLength(20);
+        configurationBuilder.Properties<DepartmentTheme>().HaveConversion<string>().HaveMaxLength(20);
+        configurationBuilder.Properties<RoomAction>().HaveConversion<string>().HaveMaxLength(20);
 
         configurationBuilder.Properties<decimal>().HavePrecision(18, 6);
     }

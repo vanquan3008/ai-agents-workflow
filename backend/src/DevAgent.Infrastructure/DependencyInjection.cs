@@ -7,6 +7,7 @@ using DevAgent.Application.Abstractions.Realtime;
 using DevAgent.Application.Abstractions.Security;
 using DevAgent.Application.Features.Admin;
 using DevAgent.Application.Features.Approvals;
+using DevAgent.Application.Features.Departments.Contracts;
 using DevAgent.Application.Features.Executions;
 using DevAgent.Application.Features.Projects;
 using DevAgent.Application.Features.Tasks;
@@ -17,6 +18,7 @@ using DevAgent.Domain.Approvals;
 using DevAgent.Domain.Approvals.Repositories;
 using DevAgent.Domain.Auditing;
 using DevAgent.Domain.Auditing.Repositories;
+using DevAgent.Domain.Departments.Repositories;
 using DevAgent.Domain.Executions;
 using DevAgent.Domain.Executions.Repositories;
 using DevAgent.Domain.Projects;
@@ -70,11 +72,16 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>API only: LISTENs on PostgreSQL and forwards events to <typeparamref name="TSink"/> (SignalR).</summary>
-    public static IServiceCollection AddRealtimeListener<TSink>(this IServiceCollection services)
+    /// <summary>
+    /// API only: LISTENs on PostgreSQL and forwards task events to <typeparamref name="TSink"/> and access revocations to
+    /// <typeparamref name="TAccessSink"/> (both SignalR).
+    /// </summary>
+    public static IServiceCollection AddRealtimeListener<TSink, TAccessSink>(this IServiceCollection services)
         where TSink : class, ITaskEventSink
+        where TAccessSink : class, IRealtimeAccessSink
     {
         services.AddSingleton<ITaskEventSink, TSink>();
+        services.AddSingleton<IRealtimeAccessSink, TAccessSink>();
         services.AddHostedService<PostgresTaskEventListener>();
         return services;
     }
@@ -148,6 +155,8 @@ public static class DependencyInjection
         services.AddScoped<IAgentInstanceRepository, AgentInstanceRepository>();
         services.AddScoped<IWorkflowRevisionRepository, WorkflowRevisionRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IItDepartmentRepository, ItDepartmentRepository>();
+        services.AddScoped<IItDepartmentRevisionRepository, ItDepartmentRevisionRepository>();
         services.AddScoped<IUserQueries, UserQueries>();
         services.AddScoped<IAuditLog, AuditLog>();
 
@@ -155,12 +164,15 @@ public static class DependencyInjection
         services.AddScoped<ITaskQueries, TaskQueries>();
         services.AddScoped<IApprovalQueries, ApprovalQueries>();
         services.AddScoped<IExecutionQueries, ExecutionQueries>();
+        services.AddScoped<IDepartmentQueries, DepartmentQueries>();
+        services.AddSingleton<DepartmentRevisionCache>();
 
         services.AddScoped<PostgresJobQueue>();
         services.AddScoped<IJobQueue>(sp => sp.GetRequiredService<PostgresJobQueue>());
         services.AddScoped<IJobStore>(sp => sp.GetRequiredService<PostgresJobQueue>());
 
         services.AddScoped<ITaskEventPublisher, PostgresTaskEventPublisher>();
+        services.AddScoped<IRealtimeAccessRevoker, PostgresRealtimeAccessRevoker>();
     }
 
     private static void AddAiProvider(this IServiceCollection services, IConfiguration configuration)

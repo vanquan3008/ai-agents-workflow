@@ -73,17 +73,18 @@ public sealed partial class SuperAdminSeeder(
             throw new InvalidOperationException($"Bootstrap:SuperAdmin:Password chưa đạt chính sách mật khẩu: {string.Join(" ", errors)}");
         }
 
+        var now = clock.GetUtcNow();
         var existing = await context.Users.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
         if (existing is not null)
         {
             // The account already exists: promote it instead of creating a duplicate email.
-            existing.ChangeRole(SystemRole.SuperAdmin);
-            existing.Activate();
+            existing.ChangeRole(SystemRole.SuperAdmin, now);
+            existing.Activate(now);
         }
         else
         {
-            var user = User.Create(email, admin.DisplayName, SystemRole.SuperAdmin, clock.GetUtcNow());
-            user.SetPassword(hasher.Hash(admin.Password), mustChange: true);
+            var user = User.Create(email, admin.DisplayName, SystemRole.SuperAdmin, now);
+            user.SetPassword(hasher.Hash(admin.Password), mustChange: true, now);
             context.Users.Add(user);
         }
 

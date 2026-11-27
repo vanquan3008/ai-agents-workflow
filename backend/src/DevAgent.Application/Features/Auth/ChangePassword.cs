@@ -54,7 +54,7 @@ internal sealed class ChangePasswordHandler(
         }
 
         var now = clock.GetUtcNow();
-        user.SetPassword(hasher.Hash(command.NewPassword), mustChange: false);
+        user.SetPassword(hasher.Hash(command.NewPassword), mustChange: false, now);
         foreach (var token in await refreshTokens.ListActiveByUserAsync(user.Id, cancellationToken))
         {
             token.Revoke("password_changed", now);

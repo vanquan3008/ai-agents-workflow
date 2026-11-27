@@ -287,6 +287,137 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_entries", "devagent");
                 });
 
+            modelBuilder.Entity("DevAgent.Domain.Departments.ItDepartment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archived_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Draft")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("draft_config");
+
+                    b.Property<int>("EditVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("edit_version");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<int?>("PublishedVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("published_version");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("slug");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_it_departments");
+
+                    b.HasAlternateKey("ProjectId", "Id")
+                        .HasName("ak_it_departments_project_id_id");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_it_departments_created_by");
+
+                    b.HasIndex("ProjectId", "Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ux_it_departments_project_slug");
+
+                    b.HasIndex("ProjectId", "Id", "PublishedVersion")
+                        .HasDatabaseName("ix_it_departments_project_id_id_published_version");
+
+                    b.ToTable("it_departments", "devagent", t =>
+                        {
+                            t.HasCheckConstraint("ck_it_departments_draft_config_object", "draft_config IS NULL OR (jsonb_typeof(draft_config) = 'object' AND pg_column_size(draft_config) <= 65536)");
+
+                            t.HasCheckConstraint("ck_it_departments_edit_version_positive", "edit_version > 0");
+
+                            t.HasCheckConstraint("ck_it_departments_name_not_blank", "btrim(name) <> ''");
+
+                            t.HasCheckConstraint("ck_it_departments_published_version_positive", "published_version IS NULL OR published_version > 0");
+
+                            t.HasCheckConstraint("ck_it_departments_slug_format", "slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+                        });
+                });
+
+            modelBuilder.Entity("DevAgent.Domain.Departments.ItDepartmentRevision", b =>
+                {
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("department_id");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<Guid>("PublishedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_by");
+
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("theme");
+
+                    b.HasKey("ProjectId", "DepartmentId", "Version")
+                        .HasName("pk_it_department_revisions");
+
+                    b.HasIndex("PublishedBy")
+                        .HasDatabaseName("ix_it_department_revisions_published_by");
+
+                    b.ToTable("it_department_revisions", "devagent", t =>
+                        {
+                            t.HasCheckConstraint("ck_it_department_revisions_name_not_blank", "btrim(name) <> ''");
+
+                            t.HasCheckConstraint("ck_it_department_revisions_theme", "theme IN ('Indigo', 'Emerald', 'Amber', 'Slate')");
+
+                            t.HasCheckConstraint("ck_it_department_revisions_version_positive", "version > 0");
+                        });
+                });
+
             modelBuilder.Entity("DevAgent.Domain.Executions.AgentExecution", b =>
                 {
                     b.Property<Guid>("Id")
@@ -481,6 +612,9 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_code_repositories");
 
+                    b.HasAlternateKey("ProjectId", "Id")
+                        .HasName("ak_code_repositories_project_id_id");
+
                     b.HasIndex("InstallationId")
                         .HasDatabaseName("ix_code_repositories_installation_id");
 
@@ -596,6 +730,10 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status", "UpdatedAt")
                         .HasDatabaseName("ix_tasks_status_updated_at");
 
+                    b.HasIndex("ProjectId", "RepositoryId", "CreatedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("ix_tasks_project_repository_created");
+
                     b.HasIndex("ProjectId", "Status", "CreatedAt")
                         .IsDescending(false, false, true)
                         .HasDatabaseName("ix_tasks_project_id_status_created_at");
@@ -653,6 +791,12 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id")
                         .HasName("pk_refresh_tokens");
@@ -907,6 +1051,180 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_approvals_tasks_task_id");
                 });
 
+            modelBuilder.Entity("DevAgent.Domain.Departments.ItDepartment", b =>
+                {
+                    b.HasOne("DevAgent.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_it_departments_created_by");
+
+                    b.HasOne("DevAgent.Domain.Projects.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_it_departments_project");
+
+                    b.HasOne("DevAgent.Domain.Departments.ItDepartmentRevision", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "Id", "PublishedVersion")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_it_departments_published_revision");
+                });
+
+            modelBuilder.Entity("DevAgent.Domain.Departments.ItDepartmentRevision", b =>
+                {
+                    b.HasOne("DevAgent.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_it_department_revisions_published_by");
+
+                    b.HasOne("DevAgent.Domain.Departments.ItDepartment", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "DepartmentId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_it_department_revisions_department");
+
+                    b.OwnsMany("DevAgent.Domain.Departments.Layout.DepartmentRoom", "Rooms", b1 =>
+                        {
+                            b1.Property<Guid>("ProjectId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("project_id");
+
+                            b1.Property<Guid>("DepartmentId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("department_id");
+
+                            b1.Property<int>("Version")
+                                .HasColumnType("integer")
+                                .HasColumnName("version");
+
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid")
+                                .HasColumnName("room_id");
+
+                            b1.Property<string>("Action")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasColumnName("action");
+
+                            b1.Property<string>("AssetPreset")
+                                .IsRequired()
+                                .HasMaxLength(40)
+                                .HasColumnType("character varying(40)")
+                                .HasColumnName("asset_preset");
+
+                            b1.Property<int>("Height")
+                                .HasColumnType("integer")
+                                .HasColumnName("height");
+
+                            b1.Property<string>("Label")
+                                .IsRequired()
+                                .HasMaxLength(60)
+                                .HasColumnType("character varying(60)")
+                                .HasColumnName("label");
+
+                            b1.Property<int>("SortOrder")
+                                .HasColumnType("integer")
+                                .HasColumnName("sort_order");
+
+                            b1.Property<string>("Station")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasColumnName("stage");
+
+                            b1.Property<int>("Width")
+                                .HasColumnType("integer")
+                                .HasColumnName("width");
+
+                            b1.Property<int>("X")
+                                .HasColumnType("integer")
+                                .HasColumnName("x");
+
+                            b1.Property<int>("Y")
+                                .HasColumnType("integer")
+                                .HasColumnName("y");
+
+                            b1.HasKey("ProjectId", "DepartmentId", "Version", "Id")
+                                .HasName("pk_it_department_revision_rooms");
+
+                            b1.HasIndex("ProjectId", "DepartmentId", "Version", "SortOrder")
+                                .IsUnique()
+                                .HasDatabaseName("ux_it_department_revision_rooms_sort_order");
+
+                            b1.HasIndex("ProjectId", "DepartmentId", "Version", "Station")
+                                .IsUnique()
+                                .HasDatabaseName("ux_it_department_revision_rooms_stage")
+                                .HasFilter("stage IS NOT NULL");
+
+                            b1.ToTable("it_department_revision_rooms", "devagent", t =>
+                                {
+                                    t.HasCheckConstraint("ck_it_department_revision_rooms_action", "action IS NULL OR (stage IS NULL AND action IN ('OpenTasks', 'OpenApprovals', 'OpenProject', 'OpenWorkflow'))");
+
+                                    t.HasCheckConstraint("ck_it_department_revision_rooms_geometry", "x >= 0 AND y >= 0 AND width > 0 AND height > 0 AND x + width <= 24 AND y + height <= 16");
+
+                                    t.HasCheckConstraint("ck_it_department_revision_rooms_label_not_blank", "btrim(label) <> ''");
+
+                                    t.HasCheckConstraint("ck_it_department_revision_rooms_sort_order", "sort_order >= 0");
+
+                                    t.HasCheckConstraint("ck_it_department_revision_rooms_stage", "stage IS NULL OR stage IN ('Planning', 'Development', 'Testing', 'Review', 'Approval', 'Publishing')");
+                                });
+
+                            b1.WithOwner()
+                                .HasForeignKey("ProjectId", "DepartmentId", "Version")
+                                .HasConstraintName("fk_it_department_revision_rooms_revision");
+                        });
+
+                    b.OwnsMany("DevAgent.Domain.Departments.RevisionRepositoryLink", "Repositories", b1 =>
+                        {
+                            b1.Property<Guid>("ProjectId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("project_id");
+
+                            b1.Property<Guid>("DepartmentId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("department_id");
+
+                            b1.Property<int>("Version")
+                                .HasColumnType("integer")
+                                .HasColumnName("version");
+
+                            b1.Property<Guid>("RepositoryId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("repository_id");
+
+                            b1.HasKey("ProjectId", "DepartmentId", "Version", "RepositoryId")
+                                .HasName("pk_it_department_revision_repositories");
+
+                            b1.HasIndex("ProjectId", "RepositoryId")
+                                .HasDatabaseName("ix_it_department_revision_repositories_repository");
+
+                            b1.ToTable("it_department_revision_repositories", "devagent");
+
+                            b1.HasOne("DevAgent.Domain.Repositories.CodeRepository", null)
+                                .WithMany()
+                                .HasForeignKey("ProjectId", "RepositoryId")
+                                .HasPrincipalKey("ProjectId", "Id")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired()
+                                .HasConstraintName("fk_it_department_revision_repositories_repository");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ProjectId", "DepartmentId", "Version")
+                                .HasConstraintName("fk_it_department_revision_repositories_revision");
+                        });
+
+                    b.Navigation("Repositories");
+
+                    b.Navigation("Rooms");
+                });
+
             modelBuilder.Entity("DevAgent.Domain.Executions.AgentExecution", b =>
                 {
                     b.HasOne("DevAgent.Domain.Agents.AgentProfile", null)
@@ -1083,19 +1401,20 @@ namespace DevAgent.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_tasks_projects_project_id");
 
-                    b.HasOne("DevAgent.Domain.Repositories.CodeRepository", null)
-                        .WithMany()
-                        .HasForeignKey("RepositoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_tasks_code_repositories_repository_id");
-
                     b.HasOne("DevAgent.Domain.Users.User", null)
                         .WithMany()
                         .HasForeignKey("RequestedBy")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_tasks_users_requested_by");
+
+                    b.HasOne("DevAgent.Domain.Repositories.CodeRepository", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "RepositoryId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_tasks_code_repositories_project_scope");
 
                     b.OwnsOne("DevAgent.Domain.Tasks.PullRequestLink", "PullRequest", b1 =>
                         {

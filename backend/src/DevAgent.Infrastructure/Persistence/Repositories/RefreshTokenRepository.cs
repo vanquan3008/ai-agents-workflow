@@ -10,6 +10,9 @@ internal sealed class RefreshTokenRepository(DevAgentDbContext context) : IRefre
     public Task<RefreshToken?> FindByHashAsync(string tokenHash, CancellationToken cancellationToken) =>
         context.RefreshTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
 
+    public Task<RefreshToken?> GetByIdAsync(RefreshTokenId id, CancellationToken cancellationToken) =>
+        context.RefreshTokens.FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+
     public async Task<IReadOnlyList<RefreshToken>> ListActiveByFamilyAsync(Guid familyId, CancellationToken cancellationToken) =>
         await context.RefreshTokens.Where(t => t.FamilyId == familyId && t.RevokedAt == null).ToListAsync(cancellationToken);
 

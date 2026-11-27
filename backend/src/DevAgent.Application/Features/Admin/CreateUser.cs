@@ -68,7 +68,7 @@ internal sealed class CreateUserHandler(
 
         var now = clock.GetUtcNow();
         var user = User.Create(email, command.DisplayName, role, now);
-        user.SetPassword(hasher.Hash(command.TemporaryPassword), mustChange: true);
+        user.SetPassword(hasher.Hash(command.TemporaryPassword), mustChange: true, now);
         users.Add(user);
         auditLog.Add(AuditEntry.Record(Actor.ForUser(admin.Value.Id), "admin.users.create", "user", user.Id.ToString(), AuditOutcome.Allowed, now,
             reason: $"{email} ({role})"));

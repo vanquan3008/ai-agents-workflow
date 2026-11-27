@@ -65,18 +65,18 @@ internal sealed class UpdateUserHandler(
 
         if (newRole is { } role)
         {
-            user.ChangeRole(role);
+            user.ChangeRole(role, now);
         }
 
         if (command.IsActive is { } active && active != user.IsActive)
         {
             if (active)
             {
-                user.Activate();
+                user.Activate(now);
             }
             else
             {
-                user.Deactivate();
+                user.Deactivate(now);
                 foreach (var token in await refreshTokens.ListActiveByUserAsync(user.Id, cancellationToken))
                 {
                     token.Revoke("user_deactivated", now);

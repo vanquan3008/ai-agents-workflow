@@ -76,7 +76,11 @@ internal sealed class TaskConfiguration : IEntityTypeConfiguration<AgentTask>
         builder.Ignore(t => t.DomainEvents);
 
         builder.HasOne<Project>().WithMany().HasForeignKey(t => t.ProjectId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<CodeRepository>().WithMany().HasForeignKey(t => t.RepositoryId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<CodeRepository>().WithMany()
+            .HasForeignKey(t => new { t.ProjectId, t.RepositoryId })
+            .HasPrincipalKey(r => new { r.ProjectId, r.Id })
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_tasks_code_repositories_project_scope");
         builder.HasOne<User>().WithMany().HasForeignKey(t => t.RequestedBy).OnDelete(DeleteBehavior.Restrict);
 
         // Deduplication: one task per (project, idempotency key).
@@ -86,6 +90,11 @@ internal sealed class TaskConfiguration : IEntityTypeConfiguration<AgentTask>
         builder.HasIndex(t => new { t.ProjectId, t.Status, t.CreatedAt }).IsDescending(false, false, true);
         builder.HasIndex(t => new { t.Status, t.UpdatedAt });
         builder.HasIndex(t => t.RepositoryId);
+
+        // Department task lists: newest first within the followed repositories of one project.
+        builder.HasIndex(t => new { t.ProjectId, t.RepositoryId, t.CreatedAt })
+            .IsDescending(false, false, true)
+            .HasDatabaseName("ix_tasks_project_repository_created");
 
         builder.HasXminConcurrencyToken();
     }

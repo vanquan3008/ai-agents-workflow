@@ -48,7 +48,28 @@ export const router = createBrowserRouter([
         handle: { crumb: 'Project' },
         children: [
           { index: true, lazy: page(() => import('@/features/projects/ProjectsPage')) },
-          { path: ':projectId', lazy: page(() => import('@/features/projects/ProjectDetailPage')), handle: { crumb: 'Chi tiết' } },
+          {
+            path: ':projectId',
+            handle: { crumb: 'Chi tiết' },
+            children: [
+              { index: true, lazy: page(() => import('@/features/projects/ProjectDetailPage')) },
+              {
+                path: 'office',
+                handle: { crumb: 'Phòng kỹ thuật' },
+                children: [
+                  { index: true, lazy: page(() => import('@/features/office/OfficeDirectoryPage')) },
+                  {
+                    path: ':departmentId',
+                    handle: { crumb: 'Văn phòng' },
+                    children: [
+                      { index: true, lazy: page(() => import('@/features/office/OfficePage')) },
+                      { path: 'settings', lazy: page(() => import('@/features/office/OfficeSettingsPage')), handle: { crumb: 'Cấu hình' } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
         ],
       },
       {

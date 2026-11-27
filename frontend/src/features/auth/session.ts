@@ -21,6 +21,10 @@ export type SessionState =
 
 type Listener = (state: SessionState) => void
 
+/** Another tab rotated the refresh cookie first; the browser already holds its successor, so one retry succeeds. */
+const REFRESH_SUPERSEDED = 'auth.refresh_superseded'
+const SUPERSEDED_RETRY_DELAY_MS = 250
+
 /**
  * In-memory session store (never localStorage, so XSS cannot steal a long-lived token).
  * The access token is short-lived; the refresh token lives in an HttpOnly cookie that JavaScript cannot read.
@@ -38,6 +42,11 @@ class SessionStore {
 
   get accessToken(): string | null {
     return this.state.status === 'authenticated' ? this.state.accessToken : null
+  }
+
+  /** True when there is no access token or it expires within the given time. */
+  expiresWithin(ms: number): boolean {
+    return this.state.status !== 'authenticated' || this.state.expiresAt - Date.now() <= ms
   }
 
   subscribe(listener: Listener): () => void {
@@ -65,7 +74,7 @@ class SessionStore {
     return this.refreshing
   }
 
-  private async doRefresh(): Promise<boolean> {
+  private async doRefresh(retried = false): Promise<boolean> {
     const generation = this.generation
     try {
       const response = await fetch(`${env.apiBaseUrl}/api/v1/auth/refresh`, {
@@ -75,6 +84,10 @@ class SessionStore {
       })
       if (generation !== this.generation) return false
       if (!response.ok) {
+        if (!retried && (await problemCode(response)) === REFRESH_SUPERSEDED) {
+          await new Promise((resolve) => setTimeout(resolve, SUPERSEDED_RETRY_DELAY_MS))
+          return generation === this.generation && this.doRefresh(true)
+        }
         this.clear()
         return false
       }
@@ -100,6 +113,14 @@ class SessionStore {
   private set(state: SessionState) {
     this.state = state
     this.listeners.forEach((listener) => listener(state))
+  }
+}
+
+async function problemCode(response: Response): Promise<string | undefined> {
+  try {
+    return ((await response.json()) as { code?: string }).code
+  } catch {
+    return undefined
   }
 }
 

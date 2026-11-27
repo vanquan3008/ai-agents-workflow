@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DevAgent.Application.Abstractions.Realtime;
+using DevAgent.Domain.Common;
 using DevAgent.Infrastructure.Options;
 using DevAgent.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,9 @@ namespace DevAgent.Infrastructure.Realtime;
 internal static class RealtimeChannel
 {
     public const string Name = "devagent_task_events";
+
+    /// <summary>Access revocations, fanned out to every API instance that holds realtime connections.</summary>
+    public const string AccessName = "devagent_access_revocations";
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 }
@@ -42,16 +46,57 @@ internal sealed partial class PostgresTaskEventPublisher(DevAgentDbContext conte
     private static partial void LogPublishFailed(ILogger logger, Exception exception, Guid taskId);
 }
 
+/// <summary>
+/// Broadcasts revocations through <c>pg_notify</c> so the API instance holding the user's connections applies them,
+/// whichever process committed the change. Best effort: a missed notification is still bounded by token expiry,
+/// after which the connection is closed and must re-authorize.
+/// </summary>
+internal sealed partial class PostgresRealtimeAccessRevoker(DevAgentDbContext context, ILogger<PostgresRealtimeAccessRevoker> logger)
+    : IRealtimeAccessRevoker
+{
+    public Task RevokeProjectAsync(UserId userId, ProjectId projectId, CancellationToken cancellationToken) =>
+        NotifyAsync(new RealtimeAccessRevocation(userId.Value, projectId.Value), cancellationToken);
+
+    public Task DisconnectUserAsync(UserId userId, CancellationToken cancellationToken) =>
+        NotifyAsync(new RealtimeAccessRevocation(userId.Value, null), cancellationToken);
+
+    private async Task NotifyAsync(RealtimeAccessRevocation revocation, CancellationToken cancellationToken)
+    {
+        var payload = JsonSerializer.Serialize(revocation, RealtimeChannel.Json);
+        try
+        {
+            await context.Database.ExecuteSqlAsync($"SELECT pg_notify({RealtimeChannel.AccessName}, {payload})", cancellationToken);
+        }
+        catch (NpgsqlException ex)
+        {
+            LogRevocationFailed(logger, ex, revocation.UserId);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to broadcast realtime revocation for user {UserId}")]
+    private static partial void LogRevocationFailed(ILogger logger, Exception exception, Guid userId);
+}
+
 /// <summary>Realtime event sink inside the API process (implemented with SignalR).</summary>
 public interface ITaskEventSink
 {
     Task DeliverAsync(TaskRealtimeEvent taskEvent, CancellationToken cancellationToken);
 }
 
-/// <summary>LISTENs on the PostgreSQL channel and forwards events to <see cref="ITaskEventSink"/>, reconnecting with backoff.</summary>
+/// <summary>Applies access revocations to the realtime connections held by this API process.</summary>
+public interface IRealtimeAccessSink
+{
+    Task ApplyAsync(RealtimeAccessRevocation revocation, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// LISTENs on the PostgreSQL channels and forwards task events to <see cref="ITaskEventSink"/> and revocations to
+/// <see cref="IRealtimeAccessSink"/>, reconnecting with backoff.
+/// </summary>
 internal sealed partial class PostgresTaskEventListener(
     IConfiguration configuration,
     ITaskEventSink sink,
+    IRealtimeAccessSink accessSink,
     ILogger<PostgresTaskEventListener> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -66,9 +111,9 @@ internal sealed partial class PostgresTaskEventListener(
             {
                 await using var connection = new NpgsqlConnection(connectionString);
                 await connection.OpenAsync(stoppingToken);
-                connection.Notification += (_, args) => OnNotification(args.Payload, stoppingToken);
+                connection.Notification += (_, args) => OnNotification(args.Channel, args.Payload, stoppingToken);
 
-                await using (var command = new NpgsqlCommand($"LISTEN {RealtimeChannel.Name}", connection))
+                await using (var command = new NpgsqlCommand($"LISTEN {RealtimeChannel.Name}; LISTEN {RealtimeChannel.AccessName}", connection))
                 {
                     await command.ExecuteNonQueryAsync(stoppingToken);
                 }
@@ -93,8 +138,14 @@ internal sealed partial class PostgresTaskEventListener(
         }
     }
 
-    private void OnNotification(string payload, CancellationToken cancellationToken)
+    private void OnNotification(string channel, string payload, CancellationToken cancellationToken)
     {
+        if (channel == RealtimeChannel.AccessName)
+        {
+            OnRevocation(payload, cancellationToken);
+            return;
+        }
+
         TaskRealtimeEvent? taskEvent;
         try
         {
@@ -116,6 +167,32 @@ internal sealed partial class PostgresTaskEventListener(
                 TaskScheduler.Default);
         }
     }
+
+    private void OnRevocation(string payload, CancellationToken cancellationToken)
+    {
+        RealtimeAccessRevocation? revocation;
+        try
+        {
+            revocation = JsonSerializer.Deserialize<RealtimeAccessRevocation>(payload, RealtimeChannel.Json);
+        }
+        catch (JsonException ex)
+        {
+            LogBadPayload(logger, ex);
+            return;
+        }
+
+        if (revocation is not null)
+        {
+            _ = accessSink.ApplyAsync(revocation, cancellationToken).ContinueWith(
+                t => LogRevocationFailed(logger, t.Exception!, revocation.UserId),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to apply realtime revocation for user {UserId}")]
+    private static partial void LogRevocationFailed(ILogger logger, Exception exception, Guid userId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Listening on realtime channel {Channel}")]
     private static partial void LogListening(ILogger logger, string channel);

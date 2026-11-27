@@ -28,7 +28,10 @@ try
     builder.Services.AddAuthModule();
     builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
     builder.Services.AddDatabaseInitializer();
-    builder.Services.AddRealtimeListener<SignalRTaskEventSink>();
+    builder.Services.AddRealtimeListener<SignalRTaskEventSink, SignalRAccessSink>();
+    builder.Services.AddSingleton<RealtimeConnectionRegistry>();
+    builder.Services.AddSingleton<RealtimeConnectionSweeper>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<RealtimeConnectionSweeper>());
 
     builder.Services.AddDevAgentAuth(builder.Configuration);
     builder.Services.AddDevAgentRateLimiting(builder.Configuration);
@@ -77,7 +80,8 @@ try
         .MapTasksEndpoints()
         .MapApprovalsEndpoints()
         .MapExecutionsEndpoints()
-        .MapWorkflowsEndpoints();
+        .MapWorkflowsEndpoints()
+        .MapDepartmentsEndpoints();
 
     app.MapHub<TasksHub>(TasksHub.Path);
 

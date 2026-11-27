@@ -57,4 +57,29 @@ describe('phiên đăng nhập', () => {
     expect(await refresh).toBe(false)
     expect(session.accessToken).toBe('new-user-token')
   })
+
+  it('thử lại một lần khi tab khác vừa xoay refresh token', async () => {
+    const superseded = Response.json({ code: 'auth.refresh_superseded' }, { status: 401 })
+    const fetch = vi.fn().mockResolvedValueOnce(superseded).mockResolvedValueOnce(Response.json(response))
+    vi.stubGlobal('fetch', fetch)
+    expect(await session.refresh()).toBe(true)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(session.accessToken).toBe(response.accessToken)
+  })
+
+  it('không thử lại khi phiên đã hết hạn thật', async () => {
+    const expired = Response.json({ code: 'auth.session_expired' }, { status: 401 })
+    const fetch = vi.fn().mockResolvedValue(expired)
+    vi.stubGlobal('fetch', fetch)
+    expect(await session.refresh()).toBe(false)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(session.current.status).toBe('anonymous')
+  })
+
+  it('báo token sắp hết hạn để kết nối realtime làm mới trước', () => {
+    session.apply({ ...response, expiresAt: new Date(Date.now() + 10_000).toISOString() })
+    expect(session.expiresWithin(30_000)).toBe(true)
+    session.apply(response)
+    expect(session.expiresWithin(30_000)).toBe(false)
+  })
 })

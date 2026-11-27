@@ -47,7 +47,7 @@ internal sealed class ResetUserPasswordHandler(
         }
 
         var now = clock.GetUtcNow();
-        user.SetPassword(hasher.Hash(command.TemporaryPassword), mustChange: true);
+        user.SetPassword(hasher.Hash(command.TemporaryPassword), mustChange: true, now);
         foreach (var token in await refreshTokens.ListActiveByUserAsync(user.Id, cancellationToken))
         {
             token.Revoke("password_reset", now);

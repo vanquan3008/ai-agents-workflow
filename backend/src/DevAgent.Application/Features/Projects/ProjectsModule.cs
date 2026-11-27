@@ -1,4 +1,7 @@
+using DevAgent.Application.Abstractions.Events;
 using DevAgent.Application.Common;
+using DevAgent.Application.Features.Projects.EventHandlers;
+using DevAgent.Domain.Projects;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DevAgent.Application.Features.Projects;
@@ -13,5 +16,6 @@ internal static class ProjectsModule
         .AddScoped<IQueryHandler<GetProjectQuery, ProjectDto>, GetProjectHandler>()
         .AddScoped<IQueryHandler<ListMyProjectsQuery, IReadOnlyList<ProjectDto>>, ListMyProjectsHandler>()
         .AddScoped<IQueryHandler<ListRepositoriesQuery, IReadOnlyList<RepositoryDto>>, ListRepositoriesHandler>()
-        .AddScoped<IQueryHandler<ListProjectMembersQuery, IReadOnlyList<ProjectMemberDto>>, ListProjectMembersHandler>();
+        .AddScoped<IQueryHandler<ListProjectMembersQuery, IReadOnlyList<ProjectMemberDto>>, ListProjectMembersHandler>()
+        .AddScoped<IDomainEventHandler<ProjectMemberRemoved>, ProjectMemberRemovedHandler>();
 }

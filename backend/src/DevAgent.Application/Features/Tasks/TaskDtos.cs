@@ -67,4 +67,12 @@ public sealed record TimelineEntryDto(
 
 public sealed record TaskCreatedDto(Guid TaskId, string Status, bool Created);
 
-public sealed record TaskListFilter(AgentTaskStatus? Status, RepositoryId? RepositoryId, string? Search);
+/// <param name="RepositoryIds">When set, limits the list to these repositories (a department's followed repositories).</param>
+public sealed record TaskListFilter(
+    AgentTaskStatus? Status,
+    RepositoryId? RepositoryId,
+    string? Search,
+    IReadOnlyCollection<RepositoryId>? RepositoryIds = null);
+
+/// <summary>The project and repository a task belongs to, used for scoped authorization.</summary>
+public sealed record TaskScope(ProjectId ProjectId, RepositoryId RepositoryId);

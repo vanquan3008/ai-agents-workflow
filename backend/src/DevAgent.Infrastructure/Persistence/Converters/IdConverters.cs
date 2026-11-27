@@ -1,4 +1,6 @@
 using DevAgent.Domain.Common;
+using DevAgent.Domain.Departments;
+using DevAgent.Domain.Departments.Layout;
 using DevAgent.Domain.Users;
 using DevAgent.Domain.Workflows;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -31,3 +33,7 @@ internal sealed class AuditEntryIdConverter() : ValueConverter<AuditEntryId, Gui
 internal sealed class WorkflowRevisionIdConverter() : ValueConverter<WorkflowRevisionId, Guid>(v => v.Value, v => new WorkflowRevisionId(v));
 
 internal sealed class RefreshTokenIdConverter() : ValueConverter<RefreshTokenId, Guid>(v => v.Value, v => new RefreshTokenId(v));
+
+internal sealed class ItDepartmentIdConverter() : ValueConverter<ItDepartmentId, Guid>(v => v.Value, v => new ItDepartmentId(v));
+
+internal sealed class DepartmentRoomIdConverter() : ValueConverter<DepartmentRoomId, Guid>(v => v.Value, v => new DepartmentRoomId(v));

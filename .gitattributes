@@ -1,2 +1,3 @@
+# .editorconfig and dotnet format require LF; without eol=lf, core.autocrlf=true checkouts produce CRLF on Windows.
+* text=auto eol=lf
 *.sh text eol=lf
-* text=auto

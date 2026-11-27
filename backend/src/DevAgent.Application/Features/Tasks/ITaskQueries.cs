@@ -18,4 +18,6 @@ public interface ITaskQueries
     Task<IReadOnlyList<TimelineEntryDto>> GetTimelineAsync(TaskId taskId, long afterSequence, int limit, CancellationToken cancellationToken);
 
     Task<ProjectId?> GetProjectIdAsync(TaskId taskId, CancellationToken cancellationToken);
+
+    Task<TaskScope?> GetScopeAsync(TaskId taskId, CancellationToken cancellationToken);
 }

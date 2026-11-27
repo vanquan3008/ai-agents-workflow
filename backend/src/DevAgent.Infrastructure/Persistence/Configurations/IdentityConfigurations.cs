@@ -86,6 +86,10 @@ internal sealed class CodeRepositoryConfiguration : IEntityTypeConfiguration<Cod
         builder.HasIndex(r => r.ProjectId);
         builder.HasIndex(r => r.InstallationId);
         builder.HasOne<Project>().WithMany().HasForeignKey(r => r.ProjectId).OnDelete(DeleteBehavior.Restrict);
+
+        // Target of project-scoped foreign keys (tasks, department revisions): a child row can only reference a
+        // repository of its own project.
+        builder.HasAlternateKey(r => new { r.ProjectId, r.Id }).HasName("ak_code_repositories_project_id_id");
         builder.HasXminConcurrencyToken();
 
         // The policy is an immutable, versioned value object stored as a single jsonb document.
@@ -165,5 +169,8 @@ internal sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refre
         builder.HasIndex(t => new { t.FamilyId, t.RevokedAt });
         builder.HasIndex(t => new { t.UserId, t.RevokedAt });
         builder.HasIndex(t => t.ExpiresAt);
+
+        // A token may be rotated only once: of two parallel refreshes, the second save fails instead of forking the family.
+        builder.HasXminConcurrencyToken();
     }
 }

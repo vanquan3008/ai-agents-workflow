@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using DevAgent.Application.Abstractions.Security;
+using DevAgent.Domain.Common;
 using DevAgent.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,12 +16,16 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     private sealed class Browser
     {
+        public const string DefaultUserAgent = "DevAgentTests/1.0 (browser)";
+
         private readonly HttpClient _client;
+        private readonly string _userAgent;
         private string? _refreshCookie;
 
-        public Browser(ApiFactory factory)
+        public Browser(ApiFactory factory, string userAgent = DefaultUserAgent)
         {
             _client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { HandleCookies = false });
+            _userAgent = userAgent;
         }
 
         public string? AccessToken { get; private set; }
@@ -29,6 +35,7 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url, object? body = null, bool withClientHeader = true, string? cookieOverride = null)
         {
             using var request = new HttpRequestMessage(method, url);
+            request.Headers.TryAddWithoutValidation("User-Agent", _userAgent);
             if (body is not null)
             {
                 request.Content = JsonContent.Create(body);
@@ -131,9 +138,81 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var second = browser.RefreshCookie!;
         second.ShouldNotBe(first);
 
-        // An attacker replays the old token: rejected, and the whole token family is revoked.
+        // An attacker replays the old token after the parallel-refresh window: rejected, and the whole family is revoked.
+        await AgeRotationsAsync(TestData.RequesterUserId);
         (await browser.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh", cookieOverride: first)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await browser.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh", cookieOverride: second)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Parallel_refreshes_rotate_a_token_once_and_keep_the_session()
+    {
+        await ArrangeAsync();
+        var ct = TestContext.Current.CancellationToken;
+        var tab = new Browser(factory);
+        (await tab.LoginAsync("approver@devagent.test", TestData.Password)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        for (var round = 0; round < 5; round++)
+        {
+            // Two tabs of the same browser send the same cookie at once.
+            var cookie = tab.RefreshCookie!;
+            var tabs = new[] { new Browser(factory), new Browser(factory) };
+            var responses = await Task.WhenAll(tabs.Select(t => t.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh", cookieOverride: cookie)));
+
+            responses.Count(r => r.StatusCode == HttpStatusCode.OK).ShouldBe(1, $"round {round}");
+            var loser = responses.Single(r => r.StatusCode != HttpStatusCode.OK);
+            loser.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+            (await loser.Content.ReadAsStringAsync(ct)).ShouldContain("auth.refresh_superseded");
+
+            // The loser did not revoke the family: the winner's successor still refreshes.
+            var winner = tabs[Array.FindIndex(responses, r => r.StatusCode == HttpStatusCode.OK)];
+            (await tab.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh", cookieOverride: winner.RefreshCookie)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DevAgentDbContext>();
+        var family = await db.RefreshTokens.AsNoTracking().Where(t => t.UserId == TestData.ApproverUserId).OrderByDescending(t => t.CreatedAt).Select(t => t.FamilyId).FirstAsync(ct);
+        (await db.RefreshTokens.CountAsync(t => t.FamilyId == family && t.RevokedAt == null, ct)).ShouldBe(1);
+        (await db.RefreshTokens.CountAsync(t => t.FamilyId == family && t.RevokedReason == "reuse_detected", ct)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Thief_who_rotates_first_is_caught_when_the_victim_refreshes_inside_the_window()
+    {
+        await ArrangeAsync();
+        var ct = TestContext.Current.CancellationToken;
+        var victim = new Browser(factory);
+        (await victim.LoginAsync("requester@devagent.test", TestData.Password)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var stolen = victim.RefreshCookie!;
+
+        // The thief uses the stolen cookie from another client and gets the successor.
+        var thief = new Browser(factory, "Thief/9.9");
+        (await thief.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh", cookieOverride: stolen)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The victim's browser presents the same token seconds later: not a parallel refresh of the winning client.
+        var replay = await victim.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh");
+        replay.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await replay.Content.ReadAsStringAsync(ct)).ShouldContain("auth.session_expired");
+
+        // The whole family is revoked, so the thief's successor no longer works.
+        (await thief.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DevAgentDbContext>();
+        var stolenHash = scope.ServiceProvider.GetRequiredService<ITokenService>().HashRefreshToken(stolen);
+        var family = await db.RefreshTokens.AsNoTracking().Where(t => t.TokenHash == stolenHash).Select(t => t.FamilyId).SingleAsync(ct);
+        (await db.RefreshTokens.CountAsync(t => t.FamilyId == family && t.RevokedAt == null, ct)).ShouldBe(0);
+        (await db.RefreshTokens.CountAsync(t => t.FamilyId == family && t.RevokedReason == "reuse_detected", ct)).ShouldBe(1);
+    }
+
+    /// <summary>Moves the user's rotations out of the parallel-refresh window, as if the replay came later.</summary>
+    private async Task AgeRotationsAsync(UserId userId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DevAgentDbContext>();
+        await db.Database.ExecuteSqlAsync(
+            $"UPDATE devagent.refresh_tokens SET revoked_at = revoked_at - interval '5 minutes' WHERE user_id = {userId.Value} AND replaced_by IS NOT NULL",
+            TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -162,7 +241,7 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
             if (!await db.Users.AnyAsync(u => u.Email == "lockme@devagent.test", TestContext.Current.CancellationToken))
             {
                 var user = Domain.Users.User.Create("lockme@devagent.test", "Lock", Domain.Users.SystemRole.User, DateTimeOffset.UtcNow);
-                user.SetPassword(hasher.Hash(TestData.Password), false);
+                user.SetPassword(hasher.Hash(TestData.Password), false, DateTimeOffset.UtcNow);
                 db.Users.Add(user);
                 await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
@@ -212,7 +291,7 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var adminUser = await db.Users.SingleAsync(u => u.Id == new Domain.Common.UserId(adminId), TestContext.Current.CancellationToken);
         if (adminUser.MustChangePassword)
         {
-            adminUser.SetPassword(scope.ServiceProvider.GetRequiredService<DevAgent.Application.Abstractions.Security.IPasswordHasher>().Hash("Brand-new-pass-456"), false);
+            adminUser.SetPassword(scope.ServiceProvider.GetRequiredService<DevAgent.Application.Abstractions.Security.IPasswordHasher>().Hash("Brand-new-pass-456"), false, DateTimeOffset.UtcNow);
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 

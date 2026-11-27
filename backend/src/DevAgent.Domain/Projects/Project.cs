@@ -60,7 +60,7 @@ public sealed partial class Project : AggregateRoot<ProjectId>
         existing.ChangeRole(role);
     }
 
-    public void RemoveMember(UserId userId)
+    public void RemoveMember(UserId userId, DateTimeOffset now)
     {
         var existing = _members.SingleOrDefault(m => m.UserId == userId)
             ?? throw new DomainException("project.member_not_found", "Người dùng không phải thành viên project.");
@@ -70,6 +70,7 @@ public sealed partial class Project : AggregateRoot<ProjectId>
         }
 
         _members.Remove(existing);
+        Raise(new ProjectMemberRemoved(Id, userId, Guard.Utc(now, "removed_at")));
     }
 
     public void Rename(string name) => Name = Guard.NotEmpty(name, "name", 200);

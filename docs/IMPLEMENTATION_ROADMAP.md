@@ -2,6 +2,8 @@
 
 See the [current capability audit](audit/SOURCE_CODE_AUDIT.md) and [proposed ADR-0001](adr/0001-agent-harness-runtime.md). Preserve verified behavior as milestones advance. Keep builds and tests passing and apply schema changes with new migrations. Major changes require an approved ADR.
 
+The [engineering office and workflow expansion plan](ENGINEERING_OFFICE_PLAN.md) proposes a one-repository pilot and a 2D and 3D dashboard view backed by the task lifecycle. PR 2 (custom departments and the 2D office) is implemented; see [ADR-0002](adr/0002-it-departments-module.md).
+
 ## M0 · Review the codebase
 
 Completed. The review covers source, architecture, security, and frontend, with the validation record in the [source audit](audit/SOURCE_CODE_AUDIT.md).
@@ -18,8 +20,9 @@ In progress.
 | Check `dotnet format` in CI | Done | SRC-010 |
 | Distinct pending approval badge | Done | FE-002 |
 | Remove broken source maps from production dashboard assets | Done | FE-008 |
-| Invalidate SignalR subscriptions after access is revoked | Open | SEC-010 |
+| Invalidate SignalR subscriptions after access is revoked, close connections at token expiry | Done | SEC-010 |
 | Preserve per-client authentication limits behind nginx | Open | SEC-011 |
+| Rotate each refresh token at most once under concurrent refreshes; a different user agent inside the 30-second window still revokes the family | Done | — |
 | Content Security Policy | Open | SEC-003 |
 | Playwright end-to-end checks in CI | Open | FE-001 |
 | Denial audit through an isolated unit of work | Open | SRC-011 |

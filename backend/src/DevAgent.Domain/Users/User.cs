@@ -77,13 +77,13 @@ public sealed partial class User : AggregateRoot<UserId>
 
     public bool IsLockedOut(DateTimeOffset now) => LockoutEndsAt is { } until && until > now;
 
-    public void SetPassword(string passwordHash, bool mustChange)
+    public void SetPassword(string passwordHash, bool mustChange, DateTimeOffset now)
     {
         PasswordHash = Guard.NotEmpty(passwordHash, "password_hash", 500);
         MustChangePassword = mustChange;
         FailedLoginCount = 0;
         LockoutEndsAt = null;
-        SecurityStamp = NewStamp();
+        InvalidateSessions(now);
     }
 
     /// <summary>Re-hashes with stronger parameters without changing the password, so sessions stay valid.</summary>
@@ -107,7 +107,7 @@ public sealed partial class User : AggregateRoot<UserId>
         LastLoginAt = Guard.Utc(now, "last_login_at");
     }
 
-    public void ChangeRole(SystemRole role)
+    public void ChangeRole(SystemRole role, DateTimeOffset now)
     {
         if (!Enum.IsDefined(role))
         {
@@ -117,24 +117,31 @@ public sealed partial class User : AggregateRoot<UserId>
         if (role != SystemRole)
         {
             SystemRole = role;
-            SecurityStamp = NewStamp();
+            InvalidateSessions(now);
         }
     }
 
     public void Rename(string displayName) => DisplayName = Guard.NotEmpty(displayName, "display_name", 200);
 
-    public void Deactivate()
+    public void Deactivate(DateTimeOffset now)
     {
         IsActive = false;
-        SecurityStamp = NewStamp();
+        InvalidateSessions(now);
     }
 
-    public void Activate()
+    public void Activate(DateTimeOffset now)
     {
         IsActive = true;
         FailedLoginCount = 0;
         LockoutEndsAt = null;
+        InvalidateSessions(now);
+    }
+
+    /// <summary>A new stamp rejects every token issued before it; the event lets open realtime connections be closed too.</summary>
+    private void InvalidateSessions(DateTimeOffset now)
+    {
         SecurityStamp = NewStamp();
+        Raise(new UserSessionsInvalidated(Id, Guard.Utc(now, "now")));
     }
 
     public void LinkIdentity(IdentityProvider provider, string externalId, DateTimeOffset now)

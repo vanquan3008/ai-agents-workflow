@@ -52,14 +52,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>A client carrying a valid access token for the user, signed by the application token service.</summary>
     public HttpClient ClientFor(Guid userId)
     {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AccessTokenFor(userId));
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        return client;
+    }
+
+    /// <summary>A valid access token for the user, signed by the application token service.</summary>
+    public string AccessTokenFor(Guid userId)
+    {
         using var scope = Services.CreateScope();
         var user = scope.ServiceProvider.GetRequiredService<IUserRepository>().GetByIdAsync(new UserId(userId), CancellationToken.None).GetAwaiter().GetResult()
             ?? throw new InvalidOperationException($"Không có người dùng {userId}; gọi SeedAsync trước.");
-        var token = scope.ServiceProvider.GetRequiredService<ITokenService>().CreateAccessToken(user);
-        var client = CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
-        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        return client;
+        return scope.ServiceProvider.GetRequiredService<ITokenService>().CreateAccessToken(user).Token;
     }
 
     public Task SeedAsync() => TestData.SeedAsync(Services, CancellationToken.None);

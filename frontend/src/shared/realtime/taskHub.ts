@@ -4,6 +4,8 @@ import { env } from '@/shared/config/env'
 import type { TaskRealtimeEvent } from '@/shared/api/types'
 
 type Listener = (event: TaskRealtimeEvent) => void
+
+const TOKEN_RENEW_MARGIN_MS = 30_000
 type ReconnectListener = () => void
 
 /**
@@ -21,9 +23,10 @@ class TaskHubClient {
   private build(): HubConnection {
     const connection = new HubConnectionBuilder()
       .withUrl(env.hubUrl, {
-        // Read the latest token on every (re)connect, after refreshes.
+        // Read the latest token on every (re)connect. The server closes connections whose token expired, so a
+        // reconnect must present a token that is not about to expire too.
         accessTokenFactory: async () => {
-          if (!session.accessToken) await session.refresh()
+          if (session.expiresWithin(TOKEN_RENEW_MARGIN_MS)) await session.refresh()
           return session.accessToken ?? ''
         },
       })
