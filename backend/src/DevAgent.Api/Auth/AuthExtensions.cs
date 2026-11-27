@@ -38,7 +38,7 @@ internal static class AuthExtensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ClockSkew = TimeSpan.FromSeconds(30),
+                    ClockSkew = TimeSpan.FromSeconds(jwt.ClockSkewSeconds),
                     NameClaimType = JwtRegisteredClaimNames.Name,
                     RoleClaimType = DevAgentClaims.Role,
                 };

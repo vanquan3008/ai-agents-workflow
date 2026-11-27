@@ -23,7 +23,6 @@ public static class ObservabilityExtensions
     /// </summary>
     public static IHostApplicationBuilder AddDevAgentObservability(
         this IHostApplicationBuilder builder,
-        string serviceName,
         Action<TracerProviderBuilder>? configureTracing = null,
         Action<MeterProviderBuilder>? configureMetrics = null)
     {
@@ -38,7 +37,7 @@ public static class ObservabilityExtensions
             .ReadFrom.Services(services)
             .Enrich.FromLogContext()
             .Enrich.WithMachineName()
-            .Enrich.WithProperty("Service", serviceName)
+            .Enrich.WithProperty("Service", observability.ServiceName)
             .Enrich.WithProperty("Environment", builder.Environment.EnvironmentName)
             .Enrich.With<SensitiveDataMaskingEnricher>()
             .Enrich.With<TraceContextEnricher>();
@@ -59,7 +58,7 @@ public static class ObservabilityExtensions
 
         var otel = builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource
-                .AddService(serviceName, observability.ServiceNamespace, version)
+                .AddService(observability.ServiceName, observability.ServiceNamespace, version)
                 .AddAttributes([new("deployment.environment.name", builder.Environment.EnvironmentName)]))
             .WithTracing(tracing =>
             {

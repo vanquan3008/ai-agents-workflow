@@ -20,7 +20,6 @@ try
 
     // ---- Composition root: Domain ← Application ← Infrastructure ← Api ----
     builder.AddDevAgentObservability(
-        "devagent-api",
         tracing => tracing.AddAspNetCoreInstrumentation(o => o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase)),
         metrics => metrics.AddAspNetCoreInstrumentation());
 
@@ -28,7 +27,7 @@ try
     builder.Services.AddAuthModule();
     builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
     builder.Services.AddDatabaseInitializer();
-    builder.Services.AddRealtimeListener<SignalRTaskEventSink, SignalRAccessSink>();
+    builder.Services.AddRealtimeListener<SignalRTaskEventSink, SignalRAccessSink>(builder.Configuration);
     builder.Services.AddSingleton<RealtimeConnectionRegistry>();
     builder.Services.AddSingleton<RealtimeConnectionSweeper>();
     builder.Services.AddHostedService(sp => sp.GetRequiredService<RealtimeConnectionSweeper>());

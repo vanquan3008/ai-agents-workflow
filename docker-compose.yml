@@ -64,7 +64,6 @@ services:
       <<: *backend-env
       Database__ApplyMigrationsOnStartup: ${APPLY_MIGRATIONS:-true}
       Auth__Jwt__SigningKey: ${AUTH_JWT_SIGNING_KEY:?Set AUTH_JWT_SIGNING_KEY in .env}
-      Auth__Jwt__Audience: devagent-api
       Auth__RefreshCookie__Secure: ${AUTH_COOKIE_SECURE:-false}
       Bootstrap__SuperAdmin__Email: ${BOOTSTRAP_ADMIN_EMAIL:-admin@devagent.local}
       Bootstrap__SuperAdmin__Password: ${BOOTSTRAP_ADMIN_PASSWORD:?Set BOOTSTRAP_ADMIN_PASSWORD in .env}

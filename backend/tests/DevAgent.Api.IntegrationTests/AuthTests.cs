@@ -163,6 +163,7 @@ public sealed class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
             var loser = responses.Single(r => r.StatusCode != HttpStatusCode.OK);
             loser.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
             (await loser.Content.ReadAsStringAsync(ct)).ShouldContain("auth.refresh_superseded");
+            loser.Headers.Contains("Set-Cookie").ShouldBeFalse();
 
             // The loser did not revoke the family: the winner's successor still refreshes.
             var winner = tabs[Array.FindIndex(responses, r => r.StatusCode == HttpStatusCode.OK)];

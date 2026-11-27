@@ -11,6 +11,9 @@ public sealed class DatabaseOptions
     [Range(5, 600)]
     public int CommandTimeoutSeconds { get; set; } = 30;
 
+    [Range(5, 600)]
+    public int DesignTimeCommandTimeoutSeconds { get; set; } = 120;
+
     [Range(0, 10)]
     public int MaxRetryCount { get; set; } = 3;
 
@@ -33,6 +36,31 @@ public sealed class JobQueueOptions
 
     [Range(1, 86_400)]
     public int MaxRetryDelaySeconds { get; set; } = 600;
+}
+
+public sealed class RealtimeOptions
+{
+    public const string SectionName = "Realtime";
+
+    [Range(1, 60)]
+    public int ExpirySweepIntervalSeconds { get; set; } = 15;
+
+    [Range(1, 60)]
+    public int ReconnectInitialDelaySeconds { get; set; } = 1;
+
+    [Range(1, 300)]
+    public int ReconnectMaxDelaySeconds { get; set; } = 30;
+}
+
+public sealed class DepartmentRevisionCacheOptions
+{
+    public const string SectionName = "Departments:RevisionCache";
+
+    [Range(1, 100_000)]
+    public int MaxEntries { get; set; } = 1024;
+
+    [Range(1, 1440)]
+    public int SlidingExpirationMinutes { get; set; } = 30;
 }
 
 public enum AiProvider
@@ -152,6 +180,12 @@ public sealed class DiscordOptions
 
     [Url]
     public string ApiBaseUrl { get; set; } = "https://discord.com/api/v10";
+
+    [Range(1, 300)]
+    public int RequestTimeoutSeconds { get; set; } = 15;
+
+    [Range(1, 600)]
+    public int RetryAfterFallbackSeconds { get; set; } = 5;
 }
 
 /// <summary>Sandbox limits: non-root container, no host mounts, no Docker socket.</summary>
@@ -197,6 +231,9 @@ public sealed class SecurityOptions
 public sealed class ObservabilityOptions
 {
     public const string SectionName = "Observability";
+
+    [Required]
+    public string ServiceName { get; set; } = string.Empty;
 
     [Required]
     public string ServiceNamespace { get; set; } = "devagent";

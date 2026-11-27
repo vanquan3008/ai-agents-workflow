@@ -1,15 +1,20 @@
 using DevAgent.Application.Abstractions.Persistence;
 using DevAgent.Application.Abstractions.Security;
 using DevAgent.Application.Common;
+using DevAgent.Application.Options;
 using DevAgent.Domain.Auditing;
 using DevAgent.Domain.Auditing.Repositories;
 using DevAgent.Domain.Common;
 using DevAgent.Domain.Users;
 using DevAgent.Domain.Users.Repositories;
+using Microsoft.Extensions.Options;
 
 namespace DevAgent.Application.Features.Auth;
 
-public sealed record RefreshSessionCommand(string RefreshToken, ClientInfo Client);
+public sealed record RefreshSessionCommand(string RefreshToken, ClientInfo Client)
+{
+    public const string SupersededErrorCode = "auth.refresh_superseded";
+}
 
 internal sealed class RefreshSessionHandler(
     IUserRepository users,
@@ -18,18 +23,13 @@ internal sealed class RefreshSessionHandler(
     SessionIssuer sessions,
     IAuditLog auditLog,
     IUnitOfWork unitOfWork,
+    IOptions<AuthPolicyOptions> policy,
     TimeProvider clock) : ICommandHandler<RefreshSessionCommand, AuthSession>
 {
     private static readonly Error SessionExpired = new("auth.session_expired", "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", ErrorType.Unauthorized);
 
     /// <summary>Another request rotated this token first; the browser already holds the successor cookie and may retry.</summary>
-    private static readonly Error Superseded = new("auth.refresh_superseded", "Phiên vừa được làm mới bởi một yêu cầu khác. Thử lại.", ErrorType.Unauthorized);
-
-    /// <summary>
-    /// How long a just-rotated token can count as a parallel refresh instead of theft. It never yields a session, so the
-    /// window only avoids logging out every tab of a user whose browser sent two refreshes at once.
-    /// </summary>
-    private static readonly TimeSpan ParallelRefreshWindow = TimeSpan.FromSeconds(30);
+    private static readonly Error Superseded = new(RefreshSessionCommand.SupersededErrorCode, "Phiên vừa được làm mới bởi một yêu cầu khác. Thử lại.", ErrorType.Unauthorized);
 
     public async Task<Result<AuthSession>> HandleAsync(RefreshSessionCommand command, CancellationToken cancellationToken)
     {
@@ -48,7 +48,8 @@ internal sealed class RefreshSessionHandler(
 
         if (!token.IsActive(now))
         {
-            if (token.WasRotatedSince(now - ParallelRefreshWindow) && await IsParallelRefreshAsync(token, command.Client, cancellationToken))
+            var parallelRefreshWindow = TimeSpan.FromSeconds(policy.Value.ParallelRefreshWindowSeconds);
+            if (token.WasRotatedSince(now - parallelRefreshWindow) && await IsParallelRefreshAsync(token, command.Client, cancellationToken))
             {
                 return Superseded;
             }

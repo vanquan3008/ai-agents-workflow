@@ -19,4 +19,8 @@ public sealed class AuthPolicyOptions
 
     [Range(1, 90)]
     public int RefreshTokenDays { get; set; } = 7;
+
+    /// <summary>How long overlapping refresh requests can be retried without revoking the token family.</summary>
+    [Range(1, 30)]
+    public int ParallelRefreshWindowSeconds { get; set; } = 30;
 }

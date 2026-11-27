@@ -117,7 +117,7 @@ internal sealed partial class DiscordChatNotifier(HttpClient http, IOptions<Disc
     internal static string Nonce(string deduplicationKey) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(deduplicationKey)))[..25];
 
-    private static async Task<TimeSpan> RetryAfterAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private async Task<TimeSpan> RetryAfterAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         if (response.Headers.RetryAfter?.Delta is { } delta)
         {
@@ -143,7 +143,7 @@ internal sealed partial class DiscordChatNotifier(HttpClient http, IOptions<Disc
             // Non-JSON body: fall back to the default delay.
         }
 
-        return TimeSpan.FromSeconds(5);
+        return TimeSpan.FromSeconds(options.Value.RetryAfterFallbackSeconds);
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Discord returned {StatusCode} for the notification of task {TaskId}")]

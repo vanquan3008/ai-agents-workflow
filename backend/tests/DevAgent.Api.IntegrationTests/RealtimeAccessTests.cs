@@ -11,11 +11,13 @@ using DevAgent.Domain.Repositories;
 using DevAgent.Domain.Tasks;
 using DevAgent.Domain.Users;
 using DevAgent.Domain.Users.Repositories;
+using DevAgent.Infrastructure.Options;
 using DevAgent.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Shouldly;
 
 namespace DevAgent.Api.IntegrationTests;
@@ -93,7 +95,8 @@ public sealed class RealtimeAccessTests(ApiFactory factory) : IClassFixture<ApiF
         var connection = Registry.ForUser(scenario.MemberId).Single();
         connection.ExpiresAt.ShouldNotBeNull();
 
-        var sweeper = new RealtimeConnectionSweeper(Registry, new FixedClock(connection.ExpiresAt.Value.AddSeconds(1)), NullLogger<RealtimeConnectionSweeper>.Instance);
+        var sweeper = new RealtimeConnectionSweeper(Registry, factory.Services.GetRequiredService<IOptions<RealtimeOptions>>(),
+            new FixedClock(connection.ExpiresAt.Value.AddSeconds(1)), NullLogger<RealtimeConnectionSweeper>.Instance);
         sweeper.Sweep().ShouldBeGreaterThanOrEqualTo(1);
 
         await closed.Task.WaitAsync(Wait, Ct);

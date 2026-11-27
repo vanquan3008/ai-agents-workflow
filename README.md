@@ -149,17 +149,18 @@ The Planner currently uses its configured approval mode, attempt limit, and mode
 
 ## Configuration and secrets
 
-[.env.example](.env.example) lists Compose settings. The API and Worker also read `appsettings.json`, their environment-specific settings files, and hierarchical environment variables such as `Ai__Provider` and `Ai__Anthropic__ApiKey`.
+The API and Worker each read their `appsettings.json` and `appsettings.{Environment}.json`. Development user secrets and hierarchical environment variables such as `Ai__Provider` and `Ai__Anthropic__ApiKey` can override those values. [.env.example](.env.example) lists the deployment overrides passed by Compose.
 
 | Settings | Purpose |
 | --- | --- |
 | `ConnectionStrings`, `Database` | PostgreSQL, migrations, and seeding. |
 | `Auth`, `Bootstrap`, `Cors`, `RateLimiting` | Authentication, initial administrator, allowed origins, and request limits. |
+| `Realtime`, `Departments:RevisionCache` | API connection expiry checks, PostgreSQL reconnect backoff, and the published office cache. |
 | `Ai`, `GitHub`, `Discord` | Adapter selection and integration credentials. |
-| `AgentLimits`, `JobQueue`, `Worker` | Budgets, time limits, retries, leases, and concurrency. |
+| `AgentLimits`, `JobQueue`, `Worker`, `HostOptions` | Budgets, time limits, retries, leases, concurrency, and graceful Worker shutdown. Keep `HostOptions:ShutdownTimeout` longer than `Worker:ShutdownGraceSeconds`. |
 | `Security`, `Observability`, `PublicUrls` | Secret encryption, telemetry, and dashboard links. |
 
-Use environment variables or a secret store for real values. Treat every `VITE_*` value as public. See the [secret setup notes](secrets/README.md).
+Supply the PostgreSQL connection string and other secrets through environment variables or a secret store, including when running the API or Worker directly in Development. `dotnet ef` uses the API configuration and `Database:DesignTimeCommandTimeoutSeconds`. EF model and migration generation work without database credentials. Applying migrations requires a connection string. Treat every `VITE_*` value as public. See the [secret setup notes](secrets/README.md).
 
 The dashboard container generates `/config.js` at startup using `DEVAGENT_ENVIRONMENT`, `DEVAGENT_API_BASE_URL`, `DEVAGENT_SIGNALR_HUB_PATH`, and `DEVAGENT_APP_NAME`. The development server uses `VITE_*` settings. The [GitHub App Compose overlay](docker-compose.github-app.yml) describes the future private-key mount.
 

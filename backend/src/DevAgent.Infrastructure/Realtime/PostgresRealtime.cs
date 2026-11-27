@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace DevAgent.Infrastructure.Realtime;
@@ -95,6 +96,7 @@ public interface IRealtimeAccessSink
 /// </summary>
 internal sealed partial class PostgresTaskEventListener(
     IConfiguration configuration,
+    IOptions<RealtimeOptions> options,
     ITaskEventSink sink,
     IRealtimeAccessSink accessSink,
     ILogger<PostgresTaskEventListener> logger) : BackgroundService
@@ -103,7 +105,9 @@ internal sealed partial class PostgresTaskEventListener(
     {
         var connectionString = configuration.GetConnectionString(DatabaseOptions.ConnectionStringName)
             ?? throw new InvalidOperationException("ConnectionStrings:Postgres is missing.");
-        var delay = TimeSpan.FromSeconds(1);
+        var initialDelay = TimeSpan.FromSeconds(options.Value.ReconnectInitialDelaySeconds);
+        var maxDelay = TimeSpan.FromSeconds(options.Value.ReconnectMaxDelaySeconds);
+        var delay = initialDelay;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -119,7 +123,7 @@ internal sealed partial class PostgresTaskEventListener(
                 }
 
                 LogListening(logger, RealtimeChannel.Name);
-                delay = TimeSpan.FromSeconds(1);
+                delay = initialDelay;
                 while (!stoppingToken.IsCancellationRequested)
                 {
                     await connection.WaitAsync(stoppingToken);
@@ -133,7 +137,7 @@ internal sealed partial class PostgresTaskEventListener(
             {
                 LogListenFailed(logger, ex, delay.TotalSeconds);
                 await Task.Delay(delay, stoppingToken);
-                delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 30));
+                delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, maxDelay.TotalSeconds));
             }
         }
     }

@@ -1,3 +1,6 @@
+using DevAgent.Infrastructure.Options;
+using Microsoft.Extensions.Options;
+
 namespace DevAgent.Api.Realtime;
 
 /// <summary>
@@ -6,11 +9,10 @@ namespace DevAgent.Api.Realtime;
 /// </summary>
 internal sealed partial class RealtimeConnectionSweeper(
     RealtimeConnectionRegistry registry,
+    IOptions<RealtimeOptions> options,
     TimeProvider clock,
     ILogger<RealtimeConnectionSweeper> logger) : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(15);
-
     public int Sweep()
     {
         var expired = registry.ExpiredAt(clock.GetUtcNow());
@@ -29,7 +31,7 @@ internal sealed partial class RealtimeConnectionSweeper(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(Interval, clock);
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(options.Value.ExpirySweepIntervalSeconds), clock);
         try
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))

@@ -76,10 +76,16 @@ public static class DependencyInjection
     /// API only: LISTENs on PostgreSQL and forwards task events to <typeparamref name="TSink"/> and access revocations to
     /// <typeparamref name="TAccessSink"/> (both SignalR).
     /// </summary>
-    public static IServiceCollection AddRealtimeListener<TSink, TAccessSink>(this IServiceCollection services)
+    public static IServiceCollection AddRealtimeListener<TSink, TAccessSink>(this IServiceCollection services, IConfiguration configuration)
         where TSink : class, ITaskEventSink
         where TAccessSink : class, IRealtimeAccessSink
     {
+        services.AddOptions<RealtimeOptions>()
+            .Bind(configuration.GetSection(RealtimeOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(o => o.ReconnectInitialDelaySeconds <= o.ReconnectMaxDelaySeconds,
+                "Realtime:ReconnectInitialDelaySeconds phải nhỏ hơn hoặc bằng ReconnectMaxDelaySeconds.")
+            .ValidateOnStart();
         services.AddSingleton<ITaskEventSink, TSink>();
         services.AddSingleton<IRealtimeAccessSink, TAccessSink>();
         services.AddHostedService<PostgresTaskEventListener>();
@@ -90,7 +96,7 @@ public static class DependencyInjection
     public static IServiceCollection AddDatabaseInitializer(this IServiceCollection services) =>
         services.AddHostedService<DatabaseInitializer>();
 
-    internal static void ConfigureDbContext(DbContextOptionsBuilder options, string connectionString, int commandTimeoutSeconds, int maxRetryCount) =>
+    public static void ConfigureDbContext(DbContextOptionsBuilder options, string? connectionString, int commandTimeoutSeconds, int maxRetryCount) =>
         options
             .UseNpgsql(connectionString, npgsql =>
             {
@@ -107,6 +113,10 @@ public static class DependencyInjection
     {
         services.AddOptions<DatabaseOptions>().Bind(configuration.GetSection(DatabaseOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<JobQueueOptions>().Bind(configuration.GetSection(JobQueueOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<DepartmentRevisionCacheOptions>()
+            .Bind(configuration.GetSection(DepartmentRevisionCacheOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         services.AddOptions<AiOptions>().Bind(configuration.GetSection(AiOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<GitHubOptions>().Bind(configuration.GetSection(GitHubOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<DiscordOptions>().Bind(configuration.GetSection(DiscordOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
@@ -215,7 +225,7 @@ public static class DependencyInjection
             {
                 var options = sp.GetRequiredService<IOptions<DiscordOptions>>().Value;
                 http.BaseAddress = new Uri(options.ApiBaseUrl.TrimEnd('/') + "/");
-                http.Timeout = TimeSpan.FromSeconds(15);
+                http.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
                 http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", options.BotToken);
             });
         }

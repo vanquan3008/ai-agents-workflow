@@ -41,7 +41,8 @@ internal static class AuthEndpoints
 
                 var raw = http.Request.Cookies[options.Value.RefreshCookie.Name] ?? string.Empty;
                 var result = await handler.HandleAsync(new RefreshSessionCommand(raw, Client(http)), ct);
-                if (result.IsFailure)
+                // A parallel request may have just written the successor cookie to this browser.
+                if (result.Error is { Code: not RefreshSessionCommand.SupersededErrorCode })
                 {
                     ClearCookie(http, options.Value);
                 }

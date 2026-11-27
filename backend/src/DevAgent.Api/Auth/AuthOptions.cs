@@ -19,6 +19,9 @@ public sealed class JwtOptions
     /// <summary>Short-lived access token; longer sessions rely on rotating refresh tokens.</summary>
     [Range(1, 120)]
     public int AccessTokenMinutes { get; set; } = 15;
+
+    [Range(0, 60)]
+    public int ClockSkewSeconds { get; set; } = 30;
 }
 
 public sealed class RefreshCookieOptions
@@ -34,8 +37,10 @@ public sealed class AuthOptions
 {
     public const string SectionName = "Auth";
 
+    [ValidateObjectMembers]
     public JwtOptions Jwt { get; set; } = new();
 
+    [ValidateObjectMembers]
     public RefreshCookieOptions RefreshCookie { get; set; } = new();
 }
 

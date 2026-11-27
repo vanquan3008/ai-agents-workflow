@@ -5,6 +5,7 @@ using DevAgent.Infrastructure;
 using DevAgent.Infrastructure.Observability;
 using DevAgent.Worker.Hosting;
 using DevAgent.Worker.Jobs;
+using Microsoft.Extensions.Options;
 using Serilog;
 
 // Temporary logger for startup failures only; the real logger is configured by AddDevAgentObservability.
@@ -15,16 +16,19 @@ try
 {
     var builder = Host.CreateApplicationBuilder(args);
 
-    builder.AddDevAgentObservability("devagent-worker");
+    builder.AddDevAgentObservability();
 
     builder.Services.AddApplication();
     builder.Services.AddWorkerJobHandlers();
     builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 
+    builder.Services.Configure<HostOptions>(builder.Configuration.GetSection("HostOptions"));
     builder.Services.AddOptions<WorkerOptions>()
         .Bind(builder.Configuration.GetSection(WorkerOptions.SectionName))
         .ValidateDataAnnotations()
         .Validate(o => o.LeaseRenewIntervalSeconds < o.LeaseDurationSeconds, "Worker:LeaseRenewIntervalSeconds phải nhỏ hơn LeaseDurationSeconds.")
+        .Validate<IOptions<HostOptions>>((worker, host) => TimeSpan.FromSeconds(worker.ShutdownGraceSeconds) < host.Value.ShutdownTimeout,
+            "Worker:ShutdownGraceSeconds phải nhỏ hơn HostOptions:ShutdownTimeout.")
         .ValidateOnStart();
 
     builder.Services.AddSingleton<IWorkerIdentity, WorkerIdentity>();
@@ -34,7 +38,6 @@ try
     builder.Services.AddHostedService(sp => sp.GetRequiredService<JobProcessingService>());
     builder.Services.AddHostedService<HeartbeatService>();
     builder.Services.AddHostedService<DeadLetterReconciler>();
-    builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(45));
 
     var host = builder.Build();
     await host.RunAsync();

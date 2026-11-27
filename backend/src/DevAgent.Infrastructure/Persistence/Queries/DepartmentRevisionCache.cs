@@ -1,7 +1,9 @@
 using DevAgent.Application.Features.Departments.Contracts;
 using DevAgent.Domain.Common;
 using DevAgent.Domain.Departments;
+using DevAgent.Infrastructure.Options;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
 namespace DevAgent.Infrastructure.Persistence.Queries;
 
@@ -11,12 +13,10 @@ namespace DevAgent.Infrastructure.Persistence.Queries;
 /// competing with other cache users. Keys include the project so a lookup stays project-scoped like the database query.
 /// Authorization and the published pointer are never cached.
 /// </summary>
-internal sealed class DepartmentRevisionCache : IDisposable
+internal sealed class DepartmentRevisionCache(IOptions<DepartmentRevisionCacheOptions> options) : IDisposable
 {
-    private const int MaxEntries = 1024;
-    private static readonly TimeSpan SlidingExpiration = TimeSpan.FromMinutes(30);
-
-    private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = MaxEntries });
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = options.Value.MaxEntries });
+    private readonly TimeSpan _slidingExpiration = TimeSpan.FromMinutes(options.Value.SlidingExpirationMinutes);
 
     public bool TryGet(ProjectId projectId, ItDepartmentId departmentId, int version, out DepartmentRevisionSnapshot? snapshot) =>
         _cache.TryGetValue((projectId, departmentId, version), out snapshot);
@@ -25,7 +25,7 @@ internal sealed class DepartmentRevisionCache : IDisposable
         _cache.Set((projectId, snapshot.DepartmentId, snapshot.Version), snapshot, new MemoryCacheEntryOptions
         {
             Size = 1,
-            SlidingExpiration = SlidingExpiration,
+            SlidingExpiration = _slidingExpiration,
         });
 
     public void Dispose() => _cache.Dispose();
